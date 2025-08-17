@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "function-function-kubecore-schema"
 description = 'A Crossplane composition function that resolves Kubecore App context (Python)'
 readme = "README.md"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 keywords = []
 authors = [{ name = "Novelcore", email = "opensource@novelcore.io" }]

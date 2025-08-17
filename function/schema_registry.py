@@ -7,38 +7,40 @@ and their relationships according to the KubeCore platform hierarchy.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any
+from typing import Any
+
+# Import platform relationships at module level
+try:
+    from .platform_relationships import PLATFORM_HIERARCHY, RESOURCE_RELATIONSHIPS
+except ImportError:
+    # Fallback for direct execution
+    from platform_relationships import PLATFORM_HIERARCHY, RESOURCE_RELATIONSHIPS
 
 
 @dataclass
 class ResourceSchema:
     """Represents a resource schema with its metadata and relationships."""
+
     api_version: str
     kind: str
-    schema: Dict[str, Any]
-    relationships: List[str]
+    schema: dict[str, Any]
+    relationships: list[str]
 
 
 class SchemaRegistry:
     """Registry for managing KubeCore platform schemas and relationships."""
-    
+
     def __init__(self):
         """Initialize the schema registry with platform schemas."""
-        self.schemas: Dict[str, ResourceSchema] = {}
-        self.hierarchy: Dict[str, List[str]] = {}
+        self.schemas: dict[str, ResourceSchema] = {}
+        self.hierarchy: dict[str, list[str]] = {}
         self._load_platform_schemas()
-    
+
     def _load_platform_schemas(self):
         """Load KubeCore platform schemas and relationships."""
-        try:
-            from .platform_relationships import PLATFORM_HIERARCHY, RESOURCE_RELATIONSHIPS
-        except ImportError:
-            # Fallback for direct execution
-            from platform_relationships import PLATFORM_HIERARCHY, RESOURCE_RELATIONSHIPS
-        
         # Load platform hierarchy
         self.hierarchy = PLATFORM_HIERARCHY.copy()
-        
+
         # Load basic schema definitions
         # These would typically be loaded from actual XRD files or OpenAPI specs
         self.schemas = {
@@ -53,12 +55,14 @@ class SchemaRegistry:
                             "properties": {
                                 "credentials": {"type": "object"},
                                 "organization": {"type": "string"},
-                                "baseUrl": {"type": "string"}
-                            }
+                                "baseUrl": {"type": "string"},
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=RESOURCE_RELATIONSHIPS.get("XGitHubProvider", {}).get("owns", [])
+                relationships=RESOURCE_RELATIONSHIPS.get("XGitHubProvider", {}).get(
+                    "owns", []
+                ),
             ),
             "XGitHubProject": ResourceSchema(
                 api_version="github.platform.kubecore.io/v1alpha1",
@@ -71,19 +75,24 @@ class SchemaRegistry:
                             "properties": {
                                 "name": {"type": "string"},
                                 "description": {"type": "string"},
-                                "visibility": {"type": "string", "enum": ["public", "private"]},
+                                "visibility": {
+                                    "type": "string",
+                                    "enum": ["public", "private"],
+                                },
                                 "githubProviderRef": {
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
-                                }
-                            }
+                                        "namespace": {"type": "string"},
+                                    },
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=RESOURCE_RELATIONSHIPS.get("XGitHubProject", {}).get("owns", [])
+                relationships=RESOURCE_RELATIONSHIPS.get("XGitHubProject", {}).get(
+                    "owns", []
+                ),
             ),
             "XKubeNet": ResourceSchema(
                 api_version="network.platform.kubecore.io/v1alpha1",
@@ -96,21 +105,19 @@ class SchemaRegistry:
                             "properties": {
                                 "dns": {
                                     "type": "object",
-                                    "properties": {
-                                        "domain": {"type": "string"}
-                                    }
+                                    "properties": {"domain": {"type": "string"}},
                                 },
                                 "vpc": {
                                     "type": "object",
-                                    "properties": {
-                                        "cidr": {"type": "string"}
-                                    }
-                                }
-                            }
+                                    "properties": {"cidr": {"type": "string"}},
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=RESOURCE_RELATIONSHIPS.get("XKubeNet", {}).get("supports", [])
+                relationships=RESOURCE_RELATIONSHIPS.get("XKubeNet", {}).get(
+                    "supports", []
+                ),
             ),
             "XKubeCluster": ResourceSchema(
                 api_version="platform.kubecore.io/v1alpha1",
@@ -127,21 +134,23 @@ class SchemaRegistry:
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
+                                        "namespace": {"type": "string"},
+                                    },
                                 },
                                 "kubeNetRef": {
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
-                                }
-                            }
+                                        "namespace": {"type": "string"},
+                                    },
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=RESOURCE_RELATIONSHIPS.get("XKubeCluster", {}).get("hosts", [])
+                relationships=RESOURCE_RELATIONSHIPS.get("XKubeCluster", {}).get(
+                    "hosts", []
+                ),
             ),
             "XKubeSystem": ResourceSchema(
                 api_version="platform.kubecore.io/v1alpha1",
@@ -156,18 +165,18 @@ class SchemaRegistry:
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
+                                        "namespace": {"type": "string"},
+                                    },
                                 },
                                 "components": {
                                     "type": "array",
-                                    "items": {"type": "string"}
-                                }
-                            }
+                                    "items": {"type": "string"},
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=[]
+                relationships=[],
             ),
             "XKubEnv": ResourceSchema(
                 api_version="platform.kubecore.io/v1alpha1",
@@ -190,28 +199,28 @@ class SchemaRegistry:
                                                     "type": "object",
                                                     "properties": {
                                                         "cpu": {"type": "string"},
-                                                        "memory": {"type": "string"}
-                                                    }
+                                                        "memory": {"type": "string"},
+                                                    },
                                                 },
                                                 "limits": {
                                                     "type": "object",
                                                     "properties": {
                                                         "cpu": {"type": "string"},
-                                                        "memory": {"type": "string"}
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                                        "memory": {"type": "string"},
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
                                 },
                                 "environmentConfig": {
                                     "type": "object",
                                     "properties": {
                                         "variables": {
                                             "type": "object",
-                                            "additionalProperties": {"type": "string"}
+                                            "additionalProperties": {"type": "string"},
                                         }
-                                    }
+                                    },
                                 },
                                 "qualityGates": {
                                     "type": "array",
@@ -222,27 +231,27 @@ class SchemaRegistry:
                                                 "type": "object",
                                                 "properties": {
                                                     "name": {"type": "string"},
-                                                    "namespace": {"type": "string"}
-                                                }
+                                                    "namespace": {"type": "string"},
+                                                },
                                             },
                                             "key": {"type": "string"},
                                             "phase": {"type": "string"},
-                                            "required": {"type": "boolean"}
-                                        }
-                                    }
+                                            "required": {"type": "boolean"},
+                                        },
+                                    },
                                 },
                                 "kubeClusterRef": {
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
-                                }
-                            }
+                                        "namespace": {"type": "string"},
+                                    },
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=[]
+                relationships=[],
             ),
             "XQualityGate": ResourceSchema(
                 api_version="platform.kubecore.io/v1alpha1",
@@ -262,15 +271,15 @@ class SchemaRegistry:
                                     "properties": {
                                         "environments": {
                                             "type": "array",
-                                            "items": {"type": "string"}
+                                            "items": {"type": "string"},
                                         }
-                                    }
-                                }
-                            }
+                                    },
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=[]
+                relationships=[],
             ),
             "XGitHubApp": ResourceSchema(
                 api_version="github.platform.kubecore.io/v1alpha1",
@@ -285,15 +294,17 @@ class SchemaRegistry:
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
+                                        "namespace": {"type": "string"},
+                                    },
                                 },
-                                "appName": {"type": "string"}
-                            }
+                                "appName": {"type": "string"},
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=RESOURCE_RELATIONSHIPS.get("XGitHubApp", {}).get("sources", [])
+                relationships=RESOURCE_RELATIONSHIPS.get("XGitHubApp", {}).get(
+                    "sources", []
+                ),
             ),
             "XApp": ResourceSchema(
                 api_version="platform.kubecore.io/v1alpha1",
@@ -311,8 +322,8 @@ class SchemaRegistry:
                                     "type": "object",
                                     "properties": {
                                         "name": {"type": "string"},
-                                        "namespace": {"type": "string"}
-                                    }
+                                        "namespace": {"type": "string"},
+                                    },
                                 },
                                 "environments": {
                                     "type": "array",
@@ -323,43 +334,43 @@ class SchemaRegistry:
                                                 "type": "object",
                                                 "properties": {
                                                     "name": {"type": "string"},
-                                                    "namespace": {"type": "string"}
-                                                }
+                                                    "namespace": {"type": "string"},
+                                                },
                                             },
                                             "enabled": {"type": "boolean"},
-                                            "overrides": {"type": "object"}
-                                        }
-                                    }
-                                }
-                            }
+                                            "overrides": {"type": "object"},
+                                        },
+                                    },
+                                },
+                            },
                         }
-                    }
+                    },
                 },
-                relationships=[]
-            )
+                relationships=[],
+            ),
         }
-    
-    def get_accessible_schemas(self, resource_type: str) -> List[str]:
+
+    def get_accessible_schemas(self, resource_type: str) -> list[str]:
         """Get schemas accessible to a resource type based on platform relationships."""
         if resource_type not in self.hierarchy:
             return []
-        
+
         return self.hierarchy[resource_type]
-    
-    def get_schema_info(self, resource_type: str) -> Optional[ResourceSchema]:
+
+    def get_schema_info(self, resource_type: str) -> ResourceSchema | None:
         """Get schema information for a specific resource type."""
         return self.schemas.get(resource_type)
-    
-    def get_relationship_path(self, from_type: str, to_type: str) -> List[str]:
+
+    def get_relationship_path(self, from_type: str, to_type: str) -> list[str]:
         """Get the relationship path from one resource type to another."""
         if from_type == to_type:
             return [from_type]
-        
+
         # Simple direct relationship check
         accessible = self.get_accessible_schemas(from_type)
         if to_type in accessible:
             return [from_type, to_type]
-        
+
         # For now, return empty path for indirect relationships
         # This could be enhanced with graph traversal algorithms
         return []
