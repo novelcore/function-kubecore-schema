@@ -1,6 +1,6 @@
 # function-function-kubecore-schema
 
-[![CI](https://github.com/novelcore/function-function-kubecore-schema/actions/workflows/ci.yml/badge.svg)](https://github.com/novelcore/function-function-kubecore-schema/actions/workflows/ci.yml)
+[![CI](https://github.com/novelcore/function-kubecore-schema/actions/workflows/ci.yml/badge.svg)](https://github.com/novelcore/function-function-kubecore-schema/actions/workflows/ci.yml)
 
 A Crossplane composition function (Python) that will resolve Kubecore App context.
 
