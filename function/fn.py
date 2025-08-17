@@ -156,13 +156,14 @@ class KubeCoreContextFunction:
 
     def run_function(self, request: dict[str, Any]) -> dict[str, Any]:
         """Synchronous wrapper for async function."""
-        # Run the async function in an event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            return loop.run_until_complete(self.run_function_async(request))
-        finally:
-            loop.close()
+            # Check if there's already a running event loop
+            asyncio.get_running_loop()
+            # If we're in an async context, we can't use asyncio.run()
+            raise RuntimeError("run_function called from within an event loop context. Use run_function_async instead.")
+        except RuntimeError:
+            # No event loop running, safe to use asyncio.run()
+            return asyncio.run(self.run_function_async(request))
 
     def _extract_context(self, request: dict[str, Any]) -> dict[str, Any]:
         """Extract context information from the request."""
@@ -255,8 +256,8 @@ class FunctionRunner(grpcv1.FunctionRunnerService):
         }
 
         try:
-            # Process the request through our function
-            result = self.function.run_function(request_dict)
+            # Process the request through our function (async)
+            result = await self.function.run_function_async(request_dict)
 
             # Write result to response context with correct format
             ctx_key = "context.fn.kubecore.io/platform-context"
