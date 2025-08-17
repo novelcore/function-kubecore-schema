@@ -2,7 +2,7 @@
 apiVersion: meta.pkg.crossplane.io/v1beta1
 kind: Function
 metadata:
-  name: function-kubecore-app-resolver
+  name: function-function-kubecore-schema
 spec:
   # Minimal RBAC for read-only cluster lookups performed by the function runtime.
   permissions:

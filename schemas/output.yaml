@@ -1,0 +1,144 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: outputs.context.fn.kubecore.io
+spec:
+  group: context.fn.kubecore.io
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              platformContext:
+                type: object
+                description: "Resolved platform context"
+                properties:
+                  requestor:
+                    type: object
+                    description: "Requesting resource information"
+                    properties:
+                      type:
+                        type: string
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                  availableSchemas:
+                    type: object
+                    description: "Available schemas based on resource type and relationships"
+                    additionalProperties:
+                      type: object
+                      properties:
+                        schema:
+                          type: object
+                          description: "Full OpenAPI schema if includeFullSchemas=true"
+                        metadata:
+                          type: object
+                          properties:
+                            apiVersion:
+                              type: string
+                            kind:
+                              type: string
+                            accessible:
+                              type: boolean
+                            relationshipPath:
+                              type: array
+                              items:
+                                type: string
+                            instances:
+                              type: array
+                              description: "Resolved instances from references"
+                              items:
+                                type: object
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                  summary:
+                                    type: object
+                                    description: "Key fields from status"
+                  relationships:
+                    type: object
+                    description: "Relationship mappings for the requesting resource"
+                    properties:
+                      direct:
+                        type: array
+                        description: "Direct relationships (what this resource can reference)"
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            cardinality:
+                              type: string
+                            description:
+                              type: string
+                      indirect:
+                        type: array
+                        description: "Indirect relationships (accessible through traversal)"
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            path:
+                              type: array
+                              items:
+                                type: string
+                            cardinality:
+                              type: string
+                            description:
+                              type: string
+                  insights:
+                    type: object
+                    description: "Computed insights"
+                    properties:
+                      suggestedReferences:
+                        type: array
+                        description: "Suggested references based on common patterns"
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            reason:
+                              type: string
+                            candidates:
+                              type: array
+                              items:
+                                type: object
+                      validationRules:
+                        type: array
+                        description: "Validation rules"
+                        items:
+                          type: object
+                          properties:
+                            rule:
+                              type: string
+                            description:
+                              type: string
+                      recommendations:
+                        type: array
+                        description: "Best practices"
+                        items:
+                          type: object
+                          properties:
+                            category:
+                              type: string
+                            suggestion:
+                              type: string
+                            impact:
+                              type: string
+                              enum: ["low", "medium", "high"]
+  scope: Namespaced
+  names:
+    plural: outputs
+    singular: output
+    kind: Output

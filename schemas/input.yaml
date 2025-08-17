@@ -1,0 +1,99 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: inputs.context.fn.kubecore.io
+spec:
+  group: context.fn.kubecore.io
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              query:
+                type: object
+                description: "Query configuration for context resolution"
+                properties:
+                  resourceType:
+                    type: string
+                    description: "Type of resource requesting context (e.g., XApp, XKubeSystem, XKubEnv)"
+                  requestedSchemas:
+                    type: array
+                    description: "Specific schemas requested (optional - defaults to all accessible)"
+                    items:
+                      type: string
+                  includeFullSchemas:
+                    type: boolean
+                    description: "Whether to include full schemas or just metadata"
+                    default: true
+                  includeRelationshipPaths:
+                    type: boolean
+                    description: "Whether to include relationship traversal paths"
+                    default: true
+                  maxDepth:
+                    type: integer
+                    description: "Maximum depth for relationship traversal"
+                    default: 10
+                required:
+                  - resourceType
+              context:
+                type: object
+                description: "Context hints extracted from observed composite"
+                properties:
+                  references:
+                    type: object
+                    description: "References found in the composite resource"
+                    properties:
+                      githubProjectRef:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                      kubEnvRefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                      qualityGateRefs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                  metadata:
+                    type: object
+                    description: "Resource metadata"
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                      labels:
+                        type: object
+                        additionalProperties:
+                          type: string
+                      annotations:
+                        type: object
+                        additionalProperties:
+                          type: string
+            required:
+              - query
+  scope: Namespaced
+  names:
+    plural: inputs
+    singular: input
+    kind: Input

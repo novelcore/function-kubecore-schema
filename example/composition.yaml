@@ -18,7 +18,7 @@ spec:
   # STEP 1: Resolve App context (your Python function)
   - step: resolve-app-context
     functionRef:
-      name: function-kubecore-app-resolver
+      name: function-function-kubecore-schema
     input:
       apiVersion: context.kubecore.io/v1alpha1
       kind: AppContextResolverInput

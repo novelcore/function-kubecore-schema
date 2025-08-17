@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "function-kubecore-app-resolver"
+name = "function-function-kubecore-schema"
 description = 'A Crossplane composition function that resolves Kubecore App context (Python)'
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
@@ -27,9 +27,9 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Documentation = "https://github.com/novelcore/function-kubecore-app-resolver#readme"
-Issues = "https://github.com/novelcore/function-kubecore-app-resolver/issues"
-Source = "https://github.com/novelcore/function-kubecore-app-resolver"
+Documentation = "https://github.com/novelcore/function-function-kubecore-schema#readme"
+Issues = "https://github.com/novelcore/function-function-kubecore-schema/issues"
+Source = "https://github.com/novelcore/function-function-kubecore-schema"
 
 [project.scripts]
 function = "function.main:cli"

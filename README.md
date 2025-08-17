@@ -1,6 +1,6 @@
-# function-kubecore-app-resolver
+# function-function-kubecore-schema
 
-[![CI](https://github.com/novelcore/function-kubecore-app-resolver/actions/workflows/ci.yml/badge.svg)](https://github.com/novelcore/function-kubecore-app-resolver/actions/workflows/ci.yml)
+[![CI](https://github.com/novelcore/function-function-kubecore-schema/actions/workflows/ci.yml/badge.svg)](https://github.com/novelcore/function-function-kubecore-schema/actions/workflows/ci.yml)
 
 A Crossplane composition function (Python) that will resolve Kubecore App context.
 
@@ -58,8 +58,8 @@ Use `crossplane render` with the example `composition.yaml` and your XR to inspe
 Build and push an image:
 
 ```bash
-docker build . -t ghcr.io/novelcore/function-kubecore-app-resolver:v0.0.0-$(date +%Y%m%d)-$(git rev-parse --short HEAD)
-docker push ghcr.io/novelcore/function-kubecore-app-resolver:v0.0.0-$(date +%Y%m%d)-$(git rev-parse --short HEAD)
+docker build . -t ghcr.io/novelcore/function-function-kubecore-schema:v0.0.0-$(date +%Y%m%d)-$(git rev-parse --short HEAD)
+docker push ghcr.io/novelcore/function-function-kubecore-schema:v0.0.0-$(date +%Y%m%d)-$(git rev-parse --short HEAD)
 ```
 
 Update your Function package to reference the new image tag or run with the Development runtime during testing.
