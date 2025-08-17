@@ -45,17 +45,26 @@ class InsightsEngine:
         }
         
         # Generate resource-type-specific insights
+        resource_insights = {}
         if resource_type == "XApp":
-            insights.update(self._generate_app_insights(platform_context))
+            resource_insights = self._generate_app_insights(platform_context)
         elif resource_type == "XKubeSystem":
-            insights.update(self._generate_kubesystem_insights(platform_context))
+            resource_insights = self._generate_kubesystem_insights(platform_context)
         elif resource_type == "XKubEnv":
-            insights.update(self._generate_kubenv_insights(platform_context))
+            resource_insights = self._generate_kubenv_insights(platform_context)
         else:
-            insights.update(self._generate_generic_insights(platform_context))
+            resource_insights = self._generate_generic_insights(platform_context)
+        
+        # Merge resource-specific insights
+        insights["recommendations"].extend(resource_insights.get("recommendations", []))
+        insights["validationRules"].extend(resource_insights.get("validationRules", []))
+        insights["suggestedReferences"].extend(resource_insights.get("suggestedReferences", []))
         
         # Add cross-cutting insights
-        insights.update(self._generate_cross_cutting_insights(platform_context, resource_type))
+        cross_cutting = self._generate_cross_cutting_insights(platform_context, resource_type)
+        insights["recommendations"].extend(cross_cutting.get("recommendations", []))
+        insights["validationRules"].extend(cross_cutting.get("validationRules", []))
+        insights["suggestedReferences"].extend(cross_cutting.get("suggestedReferences", []))
         
         self.logger.debug(f"Generated {len(insights['recommendations'])} recommendations for {resource_type}")
         

@@ -253,7 +253,9 @@ class QueryProcessor:
         platform_context: dict[str, Any],
     ) -> None:
         """Process a specific schema for XApp queries."""
-        schema_info = self.schema_registry.get_schema_info(schema_type)
+        # Map requested schema name to actual schema name
+        actual_schema_name = self._map_requested_to_actual_schema(schema_type)
+        schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
         
@@ -277,6 +279,7 @@ class QueryProcessor:
                 "summary": summary
             })
         
+        # Use the requested schema name as the key, not the actual schema name
         platform_context["availableSchemas"][schema_type] = {
             "metadata": {
                 "apiVersion": schema_info.api_version,
@@ -294,7 +297,9 @@ class QueryProcessor:
         platform_context: dict[str, Any],
     ) -> None:
         """Process a specific schema for XKubeSystem queries."""
-        schema_info = self.schema_registry.get_schema_info(schema_type)
+        # Map requested schema name to actual schema name
+        actual_schema_name = self._map_requested_to_actual_schema(schema_type)
+        schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
         
@@ -333,7 +338,9 @@ class QueryProcessor:
         platform_context: dict[str, Any],
     ) -> None:
         """Process a specific schema for XKubEnv queries."""
-        schema_info = self.schema_registry.get_schema_info(schema_type)
+        # Map requested schema name to actual schema name
+        actual_schema_name = self._map_requested_to_actual_schema(schema_type)
+        schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
         
@@ -372,7 +379,9 @@ class QueryProcessor:
         platform_context: dict[str, Any],
     ) -> None:
         """Process a schema for generic resource types."""
-        schema_info = self.schema_registry.get_schema_info(schema_type)
+        # Map requested schema name to actual schema name
+        actual_schema_name = self._map_requested_to_actual_schema(schema_type)
+        schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
         
@@ -463,3 +472,20 @@ class QueryProcessor:
             "name": ref.get("name", "unknown"),
             "status": "available"
         }
+
+    def _map_requested_to_actual_schema(self, requested_name: str) -> str:
+        """Map requested schema names to actual schema names in the registry."""
+        # Mapping from common request names to actual schema names
+        schema_name_mapping = {
+            "kubEnv": "XKubEnv",
+            "kubeCluster": "XKubeCluster",
+            "kubeSystem": "XKubeSystem",
+            "kubeNet": "XKubeNet",
+            "qualityGate": "XQualityGate",
+            "githubProject": "XGitHubProject",
+            "githubProvider": "XGitHubProvider",
+            "githubApp": "XGitHubApp",
+            "app": "XApp"
+        }
+        
+        return schema_name_mapping.get(requested_name, requested_name)
