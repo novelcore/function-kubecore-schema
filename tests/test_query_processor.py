@@ -1,15 +1,16 @@
 """Tests for QueryProcessor and end-to-end query processing functionality."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from function.query_processor import QueryProcessor
-from function.response_generator import ResponseGenerator
+import pytest
+
 from function.insights_engine import InsightsEngine
-from function.schema_registry import SchemaRegistry
+from function.k8s_client import K8sClient
+from function.query_processor import QueryProcessor
 from function.resource_resolver import ResourceResolver
 from function.resource_summarizer import ResourceSummarizer
-from function.k8s_client import K8sClient
+from function.response_generator import ResponseGenerator
+from function.schema_registry import SchemaRegistry
 
 
 class TestQueryProcessor:
@@ -76,17 +77,17 @@ class TestQueryProcessor:
         assert result["requestor"]["type"] == "XApp"
         assert result["requestor"]["name"] == "art-api"
         assert result["requestor"]["namespace"] == "default"
-        
+
         # Verify schemas are present
         assert "kubEnv" in result["availableSchemas"]
         kubenv_schema = result["availableSchemas"]["kubEnv"]
-        
+
         # Verify schema metadata
         assert kubenv_schema["metadata"]["apiVersion"] == "platform.kubecore.io/v1alpha1"
         assert kubenv_schema["metadata"]["kind"] == "XKubEnv"
         assert kubenv_schema["metadata"]["accessible"] is True
         assert kubenv_schema["metadata"]["relationshipPath"] == ["app", "kubEnv"]
-        
+
         # Verify instances
         assert len(kubenv_schema["instances"]) == 1
         instance = kubenv_schema["instances"][0]
@@ -94,7 +95,7 @@ class TestQueryProcessor:
         assert instance["namespace"] == "test"
         assert "environmentType" in instance["summary"]
         assert "resources" in instance["summary"]
-        
+
         # Verify relationships
         assert "direct" in result["relationships"]
         relationships = result["relationships"]["direct"]
@@ -129,11 +130,11 @@ class TestQueryProcessor:
         # Verify requestor
         assert result["requestor"]["type"] == "XKubeSystem"
         assert result["requestor"]["name"] == "demo-system"
-        
+
         # Verify both schemas are present
         assert "kubeCluster" in result["availableSchemas"]
         assert "kubEnv" in result["availableSchemas"]
-        
+
         # Verify cluster instance
         cluster_schema = result["availableSchemas"]["kubeCluster"]
         assert len(cluster_schema["instances"]) == 1
@@ -141,7 +142,7 @@ class TestQueryProcessor:
         assert cluster_instance["name"] == "demo-cluster"
         assert "version" in cluster_instance["summary"]
         assert "nodeCount" in cluster_instance["summary"]
-        
+
         # Verify environment instance
         env_schema = result["availableSchemas"]["kubEnv"]
         assert len(env_schema["instances"]) == 1
@@ -176,11 +177,11 @@ class TestQueryProcessor:
         # Verify requestor
         assert result["requestor"]["type"] == "XKubEnv"
         assert result["requestor"]["name"] == "demo-env"
-        
+
         # Verify schemas
         assert "qualityGate" in result["availableSchemas"]
         assert "kubeCluster" in result["availableSchemas"]
-        
+
         # Verify quality gate instance
         qg_schema = result["availableSchemas"]["qualityGate"]
         qg_instance = qg_schema["instances"][0]
@@ -312,31 +313,31 @@ class TestResponseGenerator:
             },
             "insights": {}
         }
-        
+
         query = {"resourceType": "XApp"}
-        
+
         result = response_generator.generate_response(platform_context, query)
-        
+
         # Verify top-level structure
         assert result["apiVersion"] == "context.fn.kubecore.io/v1beta1"
         assert result["kind"] == "Output"
         assert "spec" in result
-        
+
         # Verify spec structure
         spec = result["spec"]
         assert "platformContext" in spec
-        
+
         # Verify platform context
         pc = spec["platformContext"]
         assert pc["requestor"]["type"] == "XApp"
         assert pc["requestor"]["name"] == "art-api"
         assert pc["requestor"]["namespace"] == "default"
-        
+
         # Verify schemas are present and filtered
         assert "kubEnv" in pc["availableSchemas"]
         kubenv = pc["availableSchemas"]["kubEnv"]
         assert len(kubenv["instances"]) == 1
-        
+
         # Verify filtering worked (XApp should get environment info)
         instance = kubenv["instances"][0]
         summary = instance["summary"]
@@ -363,13 +364,13 @@ class TestResponseGenerator:
                 }
             ]
         }
-        
+
         filtered = response_generator.filter_schema_for_resource_type(schema_data, "XApp")
-        
+
         # Verify structure preserved
         assert "metadata" in filtered
         assert len(filtered["instances"]) == 1
-        
+
         # Verify filtering worked
         instance = filtered["instances"][0]
         summary = instance["summary"]
@@ -400,9 +401,9 @@ class TestResponseGenerator:
                 }
             ]
         }
-        
+
         filtered = response_generator.filter_schema_for_resource_type(schema_data, "XKubeSystem")
-        
+
         instance = filtered["instances"][0]
         summary = instance["summary"]
         assert "version" in summary
@@ -448,9 +449,9 @@ class TestResponseGenerator:
                 }
             }
         }
-        
+
         assert response_generator.validate_response_format(valid_response) is True
-        
+
         # Invalid responses
         invalid_responses = [
             {},  # Empty
@@ -465,7 +466,7 @@ class TestResponseGenerator:
                 "spec": {}  # Missing platformContext
             }
         ]
-        
+
         for invalid_response in invalid_responses:
             assert response_generator.validate_response_format(invalid_response) is False
 
@@ -494,7 +495,7 @@ class TestInsightsEngine:
                             "summary": {"environmentType": "prod"}
                         },
                         {
-                            "name": "dev-env", 
+                            "name": "dev-env",
                             "summary": {"environmentType": "dev"}
                         }
                     ]
@@ -502,31 +503,31 @@ class TestInsightsEngine:
             },
             "relationships": {"direct": []}
         }
-        
+
         insights = insights_engine.generate_insights(platform_context, "XApp")
-        
+
         # Verify structure
         assert "recommendations" in insights
         assert "validationRules" in insights
         assert "suggestedReferences" in insights
-        
+
         # Verify XApp-specific recommendations
         recommendations = insights["recommendations"]
         assert len(recommendations) > 0
-        
+
         # Check for specific recommendation categories
         categories = [r["category"] for r in recommendations]
         assert "resource-optimization" in categories
         assert "security" in categories
-        
+
         # Check for environment-specific recommendations
         prod_recs = [r for r in recommendations if "production" in r.get("suggestion", "").lower()]
         dev_recs = [r for r in recommendations if "development" in r.get("suggestion", "").lower()]
         assert len(prod_recs) > 0 or len(dev_recs) > 0
-        
+
         # Verify validation rules
         assert len(insights["validationRules"]) > 0
-        
+
         # Verify suggested references
         ref_types = [r["type"] for r in insights["suggestedReferences"]]
         assert "kubEnv" in ref_types
@@ -546,19 +547,19 @@ class TestInsightsEngine:
             },
             "relationships": {"direct": []}
         }
-        
+
         insights = insights_engine.generate_insights(platform_context, "XKubeSystem")
-        
+
         # Verify structure
         assert "recommendations" in insights
-        
+
         recommendations = insights["recommendations"]
         categories = [r["category"] for r in recommendations]
-        
+
         # Should include infrastructure and security recommendations
         assert "infrastructure" in categories
         assert "security" in categories
-        
+
         # Should recommend cluster upgrade for old version
         upgrade_recs = [r for r in recommendations if "upgrade" in r.get("suggestion", "").lower()]
         assert len(upgrade_recs) > 0
@@ -574,12 +575,12 @@ class TestInsightsEngine:
             },
             "relationships": {"direct": []}
         }
-        
+
         insights = insights_engine.generate_insights(platform_context, "XKubEnv")
-        
+
         recommendations = insights["recommendations"]
         categories = [r["category"] for r in recommendations]
-        
+
         # Should include configuration and quality assurance
         assert "configuration" in categories
         assert "quality-assurance" in categories
@@ -590,15 +591,15 @@ class TestInsightsEngine:
             "availableSchemas": {},  # No schemas available
             "relationships": {"direct": []}
         }
-        
+
         insights = insights_engine.generate_insights(platform_context, "XApp")
-        
+
         recommendations = insights["recommendations"]
-        
+
         # Should suggest adding references when no schemas are available
         context_recs = [r for r in recommendations if r["category"] == "context"]
         assert len(context_recs) > 0
-        
+
         # Should include compliance recommendations
         compliance_recs = [r for r in recommendations if r["category"] == "compliance"]
         assert len(compliance_recs) > 0
@@ -621,7 +622,7 @@ class TestEndToEndIntegration:
         query_processor = QueryProcessor(schema_registry, resource_resolver, resource_summarizer)
         response_generator = ResponseGenerator(schema_registry)
         insights_engine = InsightsEngine(schema_registry)
-        
+
         return {
             "query_processor": query_processor,
             "response_generator": response_generator,
@@ -634,7 +635,7 @@ class TestEndToEndIntegration:
         query_processor = complete_system["query_processor"]
         response_generator = complete_system["response_generator"]
         insights_engine = complete_system["insights_engine"]
-        
+
         # Step 1: Process query
         input_spec = {
             "query": {
@@ -651,37 +652,37 @@ class TestEndToEndIntegration:
                 }
             }
         }
-        
+
         platform_context = await query_processor.process_query(input_spec)
-        
+
         # Step 2: Generate insights
         insights = insights_engine.generate_insights(platform_context, "XApp")
         platform_context["insights"] = insights
-        
+
         # Step 3: Generate final response
         final_response = response_generator.generate_response(
-            platform_context, 
+            platform_context,
             input_spec["query"]
         )
-        
+
         # Verify complete response structure
         assert final_response["apiVersion"] == "context.fn.kubecore.io/v1beta1"
         assert final_response["kind"] == "Output"
-        
+
         # Verify platform context
         pc = final_response["spec"]["platformContext"]
         assert pc["requestor"]["type"] == "XApp"
         assert pc["requestor"]["name"] == "art-api"
-        
+
         # Verify schemas
         assert "kubEnv" in pc["availableSchemas"]
         kubenv = pc["availableSchemas"]["kubEnv"]
         assert len(kubenv["instances"]) == 1
-        
+
         # Verify insights
         assert "recommendations" in pc["insights"]
         assert len(pc["insights"]["recommendations"]) > 0
-        
+
         # Verify response format validation
         assert response_generator.validate_response_format(final_response) is True
 
@@ -691,7 +692,7 @@ class TestEndToEndIntegration:
         query_processor = complete_system["query_processor"]
         response_generator = complete_system["response_generator"]
         insights_engine = complete_system["insights_engine"]
-        
+
         # Test different resource types
         test_cases = [
             {
@@ -699,7 +700,7 @@ class TestEndToEndIntegration:
                 "requestedSchemas": ["kubEnv", "githubProject"]
             },
             {
-                "resourceType": "XKubeSystem", 
+                "resourceType": "XKubeSystem",
                 "requestedSchemas": ["kubeCluster"]
             },
             {
@@ -707,7 +708,7 @@ class TestEndToEndIntegration:
                 "requestedSchemas": ["qualityGate"]
             }
         ]
-        
+
         for query in test_cases:
             input_spec = {
                 "query": query,
@@ -717,16 +718,16 @@ class TestEndToEndIntegration:
                     "references": {}
                 }
             }
-            
+
             # Process through complete pipeline
             platform_context = await query_processor.process_query(input_spec)
             insights = insights_engine.generate_insights(platform_context, query["resourceType"])
             platform_context["insights"] = insights
             final_response = response_generator.generate_response(platform_context, query)
-            
+
             # Verify format compliance
             assert response_generator.validate_response_format(final_response) is True
-            
+
             # Verify requestor matches
             requestor = final_response["spec"]["platformContext"]["requestor"]
             assert requestor["type"] == query["resourceType"]

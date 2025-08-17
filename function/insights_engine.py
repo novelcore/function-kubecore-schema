@@ -43,7 +43,7 @@ class InsightsEngine:
             "validationRules": [],
             "recommendations": []
         }
-        
+
         # Generate resource-type-specific insights
         resource_insights = {}
         if resource_type == "XApp":
@@ -54,20 +54,20 @@ class InsightsEngine:
             resource_insights = self._generate_kubenv_insights(platform_context)
         else:
             resource_insights = self._generate_generic_insights(platform_context)
-        
+
         # Merge resource-specific insights
         insights["recommendations"].extend(resource_insights.get("recommendations", []))
         insights["validationRules"].extend(resource_insights.get("validationRules", []))
         insights["suggestedReferences"].extend(resource_insights.get("suggestedReferences", []))
-        
+
         # Add cross-cutting insights
         cross_cutting = self._generate_cross_cutting_insights(platform_context, resource_type)
         insights["recommendations"].extend(cross_cutting.get("recommendations", []))
         insights["validationRules"].extend(cross_cutting.get("validationRules", []))
         insights["suggestedReferences"].extend(cross_cutting.get("suggestedReferences", []))
-        
+
         self.logger.debug(f"Generated {len(insights['recommendations'])} recommendations for {resource_type}")
-        
+
         return insights
 
     def _generate_app_insights(self, platform_context: dict[str, Any]) -> dict[str, Any]:
@@ -77,10 +77,10 @@ class InsightsEngine:
             "validationRules": [],
             "recommendations": []
         }
-        
+
         # Analyze available schemas for XApp context
         available_schemas = platform_context.get("availableSchemas", {})
-        
+
         # Resource optimization recommendations
         insights["recommendations"].extend([
             {
@@ -90,13 +90,13 @@ class InsightsEngine:
                 "rationale": "Python applications often require more memory than default allocations"
             },
             {
-                "category": "resource-optimization", 
+                "category": "resource-optimization",
                 "suggestion": "Enable CPU limits for consistent performance",
                 "impact": "low",
                 "rationale": "CPU limits prevent resource contention in shared environments"
             }
         ])
-        
+
         # Security recommendations
         insights["recommendations"].extend([
             {
@@ -112,7 +112,7 @@ class InsightsEngine:
                 "rationale": "Non-root containers reduce privilege escalation risks"
             }
         ])
-        
+
         # Environment-specific recommendations
         if "kubEnv" in available_schemas:
             for instance in available_schemas["kubEnv"].get("instances", []):
@@ -131,7 +131,7 @@ class InsightsEngine:
                         "impact": "low",
                         "rationale": "Debug mode provides better troubleshooting capabilities"
                     })
-        
+
         # Validation rules
         insights["validationRules"].extend([
             {
@@ -145,7 +145,7 @@ class InsightsEngine:
                 "severity": "error"
             }
         ])
-        
+
         # Suggested references
         insights["suggestedReferences"].extend([
             {
@@ -159,7 +159,7 @@ class InsightsEngine:
                 "description": "Reference to the source code repository"
             }
         ])
-        
+
         return insights
 
     def _generate_kubesystem_insights(self, platform_context: dict[str, Any]) -> dict[str, Any]:
@@ -169,9 +169,9 @@ class InsightsEngine:
             "validationRules": [],
             "recommendations": []
         }
-        
+
         available_schemas = platform_context.get("availableSchemas", {})
-        
+
         # Infrastructure recommendations
         insights["recommendations"].extend([
             {
@@ -187,7 +187,7 @@ class InsightsEngine:
                 "rationale": "Monitoring enables proactive issue detection and resolution"
             }
         ])
-        
+
         # Security recommendations for system components
         insights["recommendations"].extend([
             {
@@ -203,7 +203,7 @@ class InsightsEngine:
                 "rationale": "RBAC limits access based on actual requirements"
             }
         ])
-        
+
         # Cluster-specific recommendations
         if "kubeCluster" in available_schemas:
             for instance in available_schemas["kubeCluster"].get("instances", []):
@@ -215,7 +215,7 @@ class InsightsEngine:
                         "impact": "high",
                         "rationale": "Older versions may have security vulnerabilities and missing features"
                     })
-        
+
         # Validation rules for system components
         insights["validationRules"].extend([
             {
@@ -229,7 +229,7 @@ class InsightsEngine:
                 "severity": "warning"
             }
         ])
-        
+
         # Suggested references
         insights["suggestedReferences"].extend([
             {
@@ -243,7 +243,7 @@ class InsightsEngine:
                 "description": "Reference environments hosted by this system"
             }
         ])
-        
+
         return insights
 
     def _generate_kubenv_insights(self, platform_context: dict[str, Any]) -> dict[str, Any]:
@@ -253,11 +253,11 @@ class InsightsEngine:
             "validationRules": [],
             "recommendations": []
         }
-        
+
         available_schemas = platform_context.get("availableSchemas", {})
         requestor = platform_context.get("requestor", {})
         env_name = requestor.get("name", "unknown")
-        
+
         # Environment configuration recommendations
         insights["recommendations"].extend([
             {
@@ -273,7 +273,7 @@ class InsightsEngine:
                 "rationale": "Network policies provide environment isolation and security"
             }
         ])
-        
+
         # Quality gate recommendations
         if "qualityGate" in available_schemas:
             insights["recommendations"].append({
@@ -289,7 +289,7 @@ class InsightsEngine:
                 "impact": "high",
                 "rationale": "Quality gates are essential for maintaining deployment quality"
             })
-        
+
         # Environment type specific recommendations
         # Note: This would typically analyze the actual environment type from resolved resources
         insights["recommendations"].extend([
@@ -306,7 +306,7 @@ class InsightsEngine:
                 "rationale": "Automated backups protect against data loss"
             }
         ])
-        
+
         # Validation rules
         insights["validationRules"].extend([
             {
@@ -320,7 +320,7 @@ class InsightsEngine:
                 "severity": "warning"
             }
         ])
-        
+
         # Suggested references
         insights["suggestedReferences"].extend([
             {
@@ -334,7 +334,7 @@ class InsightsEngine:
                 "description": "Reference quality gates applied to this environment"
             }
         ])
-        
+
         return insights
 
     def _generate_generic_insights(self, platform_context: dict[str, Any]) -> dict[str, Any]:
@@ -344,7 +344,7 @@ class InsightsEngine:
             "validationRules": [],
             "recommendations": []
         }
-        
+
         # Generic best practices
         insights["recommendations"].extend([
             {
@@ -360,7 +360,7 @@ class InsightsEngine:
                 "rationale": "Monitoring enables proactive issue detection"
             }
         ])
-        
+
         return insights
 
     def _generate_cross_cutting_insights(
@@ -374,13 +374,13 @@ class InsightsEngine:
             "validationRules": [],
             "recommendations": []
         }
-        
+
         available_schemas = platform_context.get("availableSchemas", {})
         relationships = platform_context.get("relationships", {})
-        
+
         # Relationship-based insights
         direct_relationships = relationships.get("direct", [])
-        
+
         # If there are missing expected relationships, suggest them
         expected_relationships = self._get_expected_relationships(resource_type)
         for expected_rel in expected_relationships:
@@ -391,7 +391,7 @@ class InsightsEngine:
                     "impact": "medium",
                     "rationale": f"Relationship with {expected_rel} can provide additional context and capabilities"
                 })
-        
+
         # Schema availability insights
         if len(available_schemas) == 0:
             insights["recommendations"].append({
@@ -400,7 +400,7 @@ class InsightsEngine:
                 "impact": "low",
                 "rationale": "Related schemas provide valuable context for operations"
             })
-        
+
         # Compliance recommendations
         insights["recommendations"].append({
             "category": "compliance",
@@ -408,7 +408,7 @@ class InsightsEngine:
             "impact": "low",
             "rationale": "Consistent naming improves discoverability and management"
         })
-        
+
         return insights
 
     def _get_expected_relationships(self, resource_type: str) -> list[str]:
@@ -420,7 +420,7 @@ class InsightsEngine:
             "XKubeCluster": ["kubeNet", "githubProject"],
             "XGitHubProject": ["githubProvider"],
         }
-        
+
         return relationships_map.get(resource_type, [])
 
     def analyze_security_implications(
@@ -430,9 +430,9 @@ class InsightsEngine:
     ) -> list[dict[str, Any]]:
         """Analyze security implications and generate security-focused insights."""
         security_insights = []
-        
+
         available_schemas = platform_context.get("availableSchemas", {})
-        
+
         # Network security analysis
         if resource_type in ["XApp", "XKubEnv"]:
             security_insights.append({
@@ -441,7 +441,7 @@ class InsightsEngine:
                 "impact": "high",
                 "rationale": "Network segmentation limits blast radius of security incidents"
             })
-        
+
         # Access control analysis
         security_insights.append({
             "category": "access-control",
@@ -449,7 +449,7 @@ class InsightsEngine:
             "impact": "medium",
             "rationale": "Principle of least privilege reduces security risk"
         })
-        
+
         # Data protection analysis
         if "kubEnv" in available_schemas:
             security_insights.append({
@@ -458,7 +458,7 @@ class InsightsEngine:
                 "impact": "high",
                 "rationale": "Encryption protects data confidentiality"
             })
-        
+
         return security_insights
 
     def analyze_performance_implications(
@@ -468,9 +468,9 @@ class InsightsEngine:
     ) -> list[dict[str, Any]]:
         """Analyze performance implications and generate performance insights."""
         performance_insights = []
-        
+
         available_schemas = platform_context.get("availableSchemas", {})
-        
+
         # Resource utilization analysis
         if resource_type == "XApp":
             performance_insights.append({
@@ -479,7 +479,7 @@ class InsightsEngine:
                 "impact": "medium",
                 "rationale": "Proper resource allocation improves performance and reduces costs"
             })
-        
+
         # Scaling analysis
         if "kubEnv" in available_schemas:
             performance_insights.append({
@@ -488,5 +488,5 @@ class InsightsEngine:
                 "impact": "medium",
                 "rationale": "Autoscaling maintains performance under variable load"
             })
-        
+
         return performance_insights

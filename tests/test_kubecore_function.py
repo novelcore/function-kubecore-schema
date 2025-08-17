@@ -1,7 +1,7 @@
 """Unit tests for the KubeCore Context Function (Phase 3)."""
 
 import unittest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 from function.fn import KubeCoreContextFunction
 
@@ -39,16 +39,16 @@ class TestKubeCoreContextFunction(unittest.TestCase):
             "availableSchemas": {"kubEnv": {"metadata": {}, "instances": []}},
             "relationships": {"direct": []},
         }
-        
+
         mock_insights = {
             "recommendations": [{"category": "test", "suggestion": "test"}],
             "validationRules": [],
             "suggestedReferences": []
         }
-        
+
         mock_response = {
             "apiVersion": "context.fn.kubecore.io/v1beta1",
-            "kind": "Output", 
+            "kind": "Output",
             "spec": {
                 "platformContext": {
                     **mock_platform_context,
@@ -56,7 +56,7 @@ class TestKubeCoreContextFunction(unittest.TestCase):
                 }
             }
         }
-        
+
         self.function.query_processor.process_query = AsyncMock(return_value=mock_platform_context)
         self.function.insights_engine.generate_insights = Mock(return_value=mock_insights)
         self.function.response_generator.generate_response = Mock(return_value=mock_response)
@@ -86,7 +86,7 @@ class TestKubeCoreContextFunction(unittest.TestCase):
         self.assertEqual(result["kind"], "Output")
         self.assertIn("spec", result)
         self.assertIn("platformContext", result["spec"])
-        
+
         platform_context = result["spec"]["platformContext"]
         self.assertIn("requestor", platform_context)
         self.assertIn("availableSchemas", platform_context)
@@ -103,7 +103,7 @@ class TestKubeCoreContextFunction(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             self.function.run_function(request)
-        
+
         self.assertIn("Missing 'query' in input specification", str(context.exception))
 
     def test_run_function_missing_input(self):
@@ -112,7 +112,7 @@ class TestKubeCoreContextFunction(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             self.function.run_function(request)
-        
+
         self.assertIn("Missing 'query' in input specification", str(context.exception))
 
     def test_run_function_invalid_response_format(self):
@@ -121,7 +121,7 @@ class TestKubeCoreContextFunction(unittest.TestCase):
         mock_platform_context = {"requestor": {}, "availableSchemas": {}}
         mock_insights = {"recommendations": []}
         mock_invalid_response = {"invalid": "response"}
-        
+
         self.function.query_processor.process_query = AsyncMock(return_value=mock_platform_context)
         self.function.insights_engine.generate_insights = Mock(return_value=mock_insights)
         self.function.response_generator.generate_response = Mock(return_value=mock_invalid_response)
@@ -138,7 +138,7 @@ class TestKubeCoreContextFunction(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             self.function.run_function(request)
-        
+
         self.assertIn("Generated response does not match expected format", str(context.exception))
 
     def test_extract_context(self):
@@ -163,14 +163,14 @@ class TestKubeCoreContextFunction(unittest.TestCase):
         self.assertEqual(context["requestorName"], "test-app")
         self.assertEqual(context["requestorNamespace"], "default")
         self.assertIn("references", context)
-        
+
         references = context["references"]
         self.assertIn("kubEnvRefs", references)
         self.assertIn("githubProjectRefs", references)
-        
+
         self.assertEqual(len(references["kubEnvRefs"]), 1)
         self.assertEqual(references["kubEnvRefs"][0]["name"], "demo-env")
-        
+
         self.assertEqual(len(references["githubProjectRefs"]), 2)
 
     def test_extract_context_empty_composite(self):
@@ -190,14 +190,14 @@ class TestKubeCoreContextFunction(unittest.TestCase):
             "availableSchemas": {"kubeCluster": {"metadata": {}, "instances": []}},
             "relationships": {"direct": []},
         }
-        
+
         mock_insights = {"recommendations": [], "validationRules": [], "suggestedReferences": []}
         mock_response = {
             "apiVersion": "context.fn.kubecore.io/v1beta1",
             "kind": "Output",
             "spec": {"platformContext": {**mock_platform_context, "insights": mock_insights}}
         }
-        
+
         self.function.query_processor.process_query = AsyncMock(return_value=mock_platform_context)
         self.function.insights_engine.generate_insights = Mock(return_value=mock_insights)
         self.function.response_generator.generate_response = Mock(return_value=mock_response)
@@ -228,14 +228,14 @@ class TestKubeCoreContextFunction(unittest.TestCase):
             "availableSchemas": {"qualityGate": {"metadata": {}, "instances": []}},
             "relationships": {"direct": []},
         }
-        
+
         mock_insights = {"recommendations": [], "validationRules": [], "suggestedReferences": []}
         mock_response = {
             "apiVersion": "context.fn.kubecore.io/v1beta1",
             "kind": "Output",
             "spec": {"platformContext": {**mock_platform_context, "insights": mock_insights}}
         }
-        
+
         self.function.query_processor.process_query = AsyncMock(return_value=mock_platform_context)
         self.function.insights_engine.generate_insights = Mock(return_value=mock_insights)
         self.function.response_generator.generate_response = Mock(return_value=mock_response)

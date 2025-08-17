@@ -1,7 +1,7 @@
 """Integration tests for the KubeCore Context Function gRPC interface."""
 
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, patch
 
 from crossplane.function import resource
 from crossplane.function.proto.v1 import run_function_pb2 as fnv1
@@ -25,32 +25,34 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
         """Test running function with basic gRPC request."""
         # Mock the function's run_function method
         mock_result = {
-            "platformContext": {
-                "requestor": {
-                    "type": "XApp",
-                    "name": "test-app",
-                    "namespace": "default",
-                },
-                "availableSchemas": {
-                    "XKubEnv": {
-                        "metadata": {
-                            "apiVersion": "platform.kubecore.io/v1alpha1",
-                            "kind": "XKubEnv",
-                            "accessible": True,
-                            "relationshipPath": ["XApp", "XKubEnv"],
+            "spec": {
+                "platformContext": {
+                    "requestor": {
+                        "type": "XApp",
+                        "name": "test-app",
+                        "namespace": "default",
+                    },
+                    "availableSchemas": {
+                        "XKubEnv": {
+                            "metadata": {
+                                "apiVersion": "platform.kubecore.io/v1alpha1",
+                                "kind": "XKubEnv",
+                                "accessible": True,
+                                "relationshipPath": ["XApp", "XKubEnv"],
+                            }
                         }
-                    }
-                },
-                "relationships": {"direct": [], "indirect": []},
-                "insights": {
-                    "suggestedReferences": [],
-                    "validationRules": [],
-                    "recommendations": [],
-                },
+                    },
+                    "relationships": {"direct": [], "indirect": []},
+                    "insights": {
+                        "suggestedReferences": [],
+                        "validationRules": [],
+                        "recommendations": [],
+                    },
+                }
             }
         }
 
-        self.runner.function.run_function = Mock(return_value=mock_result)
+        self.runner.function.run_function_async = AsyncMock(return_value=mock_result)
 
         # Create test request
         input_dict = {
@@ -71,32 +73,34 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
         self.assertIn("context.fn.kubecore.io/platform-context", context)
 
         platform_context = context["context.fn.kubecore.io/platform-context"]
-        self.assertIn("platformContext", platform_context)
+        self.assertIn("requestor", platform_context)
 
         # Verify the mock was called
-        self.runner.function.run_function.assert_called_once()
+        self.runner.function.run_function_async.assert_called_once()
 
     async def test_run_function_with_observed_composite(self):
         """Test running function with observed composite resource."""
         # Mock the function's run_function method
         mock_result = {
-            "platformContext": {
-                "requestor": {
-                    "type": "XApp",
-                    "name": "test-app",
-                    "namespace": "default",
-                },
-                "availableSchemas": {},
-                "relationships": {"direct": [], "indirect": []},
-                "insights": {
-                    "suggestedReferences": [],
-                    "validationRules": [],
-                    "recommendations": [],
-                },
+            "spec": {
+                "platformContext": {
+                    "requestor": {
+                        "type": "XApp",
+                        "name": "test-app",
+                        "namespace": "default",
+                    },
+                    "availableSchemas": {},
+                    "relationships": {"direct": [], "indirect": []},
+                    "insights": {
+                        "suggestedReferences": [],
+                        "validationRules": [],
+                        "recommendations": [],
+                    },
+                }
             }
         }
 
-        self.runner.function.run_function = Mock(return_value=mock_result)
+        self.runner.function.run_function_async = AsyncMock(return_value=mock_result)
 
         # Create test request with observed composite
         input_dict = {"spec": {"query": {"resourceType": "XApp"}}}
@@ -125,8 +129,8 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.results[0].severity, fnv1.Severity.SEVERITY_NORMAL)
 
         # Verify the mock was called with correct structure
-        self.runner.function.run_function.assert_called_once()
-        call_args = self.runner.function.run_function.call_args[0][0]
+        self.runner.function.run_function_async.assert_called_once()
+        call_args = self.runner.function.run_function_async.call_args[0][0]
         self.assertIn("input", call_args)
         self.assertIn("observed", call_args)
         self.assertIn("composite", call_args["observed"])
@@ -134,7 +138,7 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
     async def test_run_function_error_handling(self):
         """Test that function handles errors gracefully."""
         # Mock the function to raise an exception
-        self.runner.function.run_function = Mock(side_effect=Exception("Test error"))
+        self.runner.function.run_function_async = AsyncMock(side_effect=Exception("Test error"))
 
         input_dict = {"spec": {"query": {"resourceType": "XApp"}}}
 
@@ -164,7 +168,7 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        self.runner.function.run_function = Mock(return_value=mock_result)
+        self.runner.function.run_function_async = AsyncMock(return_value=mock_result)
 
         # Create request with no input
         req = fnv1.RunFunctionRequest()
@@ -177,8 +181,8 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.results[0].severity, fnv1.Severity.SEVERITY_NORMAL)
 
         # Verify the mock was called
-        self.runner.function.run_function.assert_called_once()
-        call_args = self.runner.function.run_function.call_args[0][0]
+        self.runner.function.run_function_async.assert_called_once()
+        call_args = self.runner.function.run_function_async.call_args[0][0]
         self.assertEqual(call_args["input"], {})
 
     async def test_logging_integration(self):
@@ -197,7 +201,7 @@ class TestFunctionRunner(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        self.runner.function.run_function = Mock(return_value=mock_result)
+        self.runner.function.run_function_async = AsyncMock(return_value=mock_result)
 
         input_dict = {"spec": {"query": {"resourceType": "XApp"}}}
 

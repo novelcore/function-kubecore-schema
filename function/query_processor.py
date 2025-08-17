@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from .resource_resolver import ResourceResolver
-from .schema_registry import SchemaRegistry
 from .resource_summarizer import ResourceSummarizer
+from .schema_registry import SchemaRegistry
 
 
 class QueryProcessor:
@@ -35,10 +35,10 @@ class QueryProcessor:
         self.resource_resolver = resource_resolver
         self.resource_summarizer = resource_summarizer
         self.logger = logging.getLogger(__name__)
-        
+
         # Phase 4 components (set by main function)
-        self.cache: Optional[Any] = None
-        self.performance_optimizer: Optional[Any] = None
+        self.cache: Any | None = None
+        self.performance_optimizer: Any | None = None
 
     async def process_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
         """Process query and generate response with Phase 4 optimizations.
@@ -52,7 +52,7 @@ class QueryProcessor:
         start_time = time.time()
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
-        
+
         resource_type = query.get("resourceType")
         if not resource_type:
             raise ValueError("resourceType is required in query")
@@ -69,11 +69,11 @@ class QueryProcessor:
                 result = await self._process_kubenv_query(input_spec)
             else:
                 result = await self._process_generic_query(input_spec)
-            
+
             duration = time.time() - start_time
             self.logger.debug(f"Query processing completed in {duration*1000:.1f}ms")
             return result
-            
+
         except Exception as e:
             duration = time.time() - start_time
             self.logger.error(f"Query processing failed after {duration*1000:.1f}ms: {e}")
@@ -86,23 +86,23 @@ class QueryProcessor:
         """
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
-        
+
         # Get available schemas for XApp
         accessible_schemas = self.schema_registry.get_accessible_schemas("XApp")
         requested_schemas = query.get("requestedSchemas", [])
-        
+
         self.logger.debug(f"XApp accessible schemas: {accessible_schemas}")
         self.logger.debug(f"XApp requested schemas: {requested_schemas}")
-        
+
         # Map requested schema names to actual schema names and check accessibility
         target_schemas = []
         for schema in requested_schemas:
             actual_schema_name = self._map_requested_to_actual_schema(schema)
             if actual_schema_name in accessible_schemas:
                 target_schemas.append(schema)
-        
+
         self.logger.debug(f"XApp target schemas: {target_schemas}")
-        
+
         # Build platform context
         platform_context = {
             "requestor": {
@@ -114,7 +114,7 @@ class QueryProcessor:
             "relationships": {"direct": []},
             "insights": {}
         }
-        
+
         # Process schemas in parallel for better performance
         if target_schemas and self.performance_optimizer:
             try:
@@ -135,14 +135,14 @@ class QueryProcessor:
                 await self._process_schema_for_app(
                     schema_type, context, platform_context
                 )
-        
+
         # Also process schemas even if no references exist (for empty reference test)
         for schema_type in requested_schemas:
             if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
                 await self._process_schema_for_app(
                     schema_type, context, platform_context
                 )
-        
+
         # Add XApp-specific relationship information
         platform_context["relationships"]["direct"].extend([
             {
@@ -156,7 +156,7 @@ class QueryProcessor:
                 "description": "App belongs to a GitHub project"
             }
         ])
-        
+
         return platform_context
 
     async def _process_kubesystem_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
@@ -166,22 +166,22 @@ class QueryProcessor:
         """
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
-        
+
         accessible_schemas = self.schema_registry.get_accessible_schemas("XKubeSystem")
         requested_schemas = query.get("requestedSchemas", [])
-        
+
         self.logger.debug(f"XKubeSystem accessible schemas: {accessible_schemas}")
         self.logger.debug(f"XKubeSystem requested schemas: {requested_schemas}")
-        
+
         # Map requested schema names to actual schema names and check accessibility
         target_schemas = []
         for schema in requested_schemas:
             actual_schema_name = self._map_requested_to_actual_schema(schema)
             if actual_schema_name in accessible_schemas:
                 target_schemas.append(schema)
-        
+
         self.logger.debug(f"XKubeSystem target schemas: {target_schemas}")
-        
+
         platform_context = {
             "requestor": {
                 "type": "XKubeSystem",
@@ -192,20 +192,20 @@ class QueryProcessor:
             "relationships": {"direct": []},
             "insights": {}
         }
-        
+
         # Process each requested schema
         for schema_type in target_schemas:
             await self._process_schema_for_kubesystem(
                 schema_type, context, platform_context
             )
-        
+
         # Also process schemas even if no references exist
         for schema_type in requested_schemas:
             if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
                 await self._process_schema_for_kubesystem(
                     schema_type, context, platform_context
                 )
-        
+
         # Add XKubeSystem-specific relationships
         platform_context["relationships"]["direct"].extend([
             {
@@ -219,7 +219,7 @@ class QueryProcessor:
                 "description": "System hosts multiple environments"
             }
         ])
-        
+
         return platform_context
 
     async def _process_kubenv_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
@@ -229,22 +229,22 @@ class QueryProcessor:
         """
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
-        
+
         accessible_schemas = self.schema_registry.get_accessible_schemas("XKubEnv")
         requested_schemas = query.get("requestedSchemas", [])
-        
+
         self.logger.debug(f"XKubEnv accessible schemas: {accessible_schemas}")
         self.logger.debug(f"XKubEnv requested schemas: {requested_schemas}")
-        
+
         # Map requested schema names to actual schema names and check accessibility
         target_schemas = []
         for schema in requested_schemas:
             actual_schema_name = self._map_requested_to_actual_schema(schema)
             if actual_schema_name in accessible_schemas:
                 target_schemas.append(schema)
-        
+
         self.logger.debug(f"XKubEnv target schemas: {target_schemas}")
-        
+
         platform_context = {
             "requestor": {
                 "type": "XKubEnv",
@@ -255,20 +255,20 @@ class QueryProcessor:
             "relationships": {"direct": []},
             "insights": {}
         }
-        
+
         # Process each requested schema
         for schema_type in target_schemas:
             await self._process_schema_for_kubenv(
                 schema_type, context, platform_context
             )
-        
+
         # Also process schemas even if no references exist
         for schema_type in requested_schemas:
             if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
                 await self._process_schema_for_kubenv(
                     schema_type, context, platform_context
                 )
-        
+
         # Add XKubEnv-specific relationships
         platform_context["relationships"]["direct"].extend([
             {
@@ -282,7 +282,7 @@ class QueryProcessor:
                 "description": "Environment applies quality gates"
             }
         ])
-        
+
         return platform_context
 
     async def _process_generic_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
@@ -290,15 +290,15 @@ class QueryProcessor:
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
         resource_type = query.get("resourceType")
-        
+
         accessible_schemas = self.schema_registry.get_accessible_schemas(resource_type)
         requested_schemas = query.get("requestedSchemas", [])
-        
+
         target_schemas = [
-            schema for schema in requested_schemas 
+            schema for schema in requested_schemas
             if schema in accessible_schemas
         ]
-        
+
         platform_context = {
             "requestor": {
                 "type": resource_type,
@@ -309,20 +309,20 @@ class QueryProcessor:
             "relationships": {"direct": []},
             "insights": {}
         }
-        
+
         # Process each requested schema
         for schema_type in target_schemas:
             await self._process_schema_generic(
                 schema_type, context, platform_context
             )
-        
+
         # Also process schemas even if no references exist
         for schema_type in requested_schemas:
             if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
                 await self._process_schema_generic(
                     schema_type, context, platform_context
                 )
-        
+
         return platform_context
 
     async def _process_schema_for_app(
@@ -337,11 +337,11 @@ class QueryProcessor:
         schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
-        
+
         # Get instances from context references
         ref_key = f"{schema_type}Refs"
         refs = context.get("references", {}).get(ref_key, [])
-        
+
         instances = []
         for ref in refs:
             # Create summary based on schema type and XApp needs
@@ -351,13 +351,13 @@ class QueryProcessor:
                 summary = await self._create_project_summary_for_app(ref)
             else:
                 summary = await self._create_generic_summary(ref)
-            
+
             instances.append({
                 "name": ref.get("name", "unknown"),
                 "namespace": ref.get("namespace", "default"),
                 "summary": summary
             })
-        
+
         # Use the requested schema name as the key, not the actual schema name
         platform_context["availableSchemas"][schema_type] = {
             "metadata": {
@@ -381,10 +381,10 @@ class QueryProcessor:
         schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
-        
+
         ref_key = f"{schema_type}Refs"
         refs = context.get("references", {}).get(ref_key, [])
-        
+
         instances = []
         for ref in refs:
             if schema_type == "kubeCluster":
@@ -393,13 +393,13 @@ class QueryProcessor:
                 summary = await self._create_kubenv_summary_for_system(ref)
             else:
                 summary = await self._create_generic_summary(ref)
-            
+
             instances.append({
                 "name": ref.get("name", "unknown"),
                 "namespace": ref.get("namespace", "default"),
                 "summary": summary
             })
-        
+
         platform_context["availableSchemas"][schema_type] = {
             "metadata": {
                 "apiVersion": schema_info.api_version,
@@ -422,10 +422,10 @@ class QueryProcessor:
         schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
-        
+
         ref_key = f"{schema_type}Refs"
         refs = context.get("references", {}).get(ref_key, [])
-        
+
         instances = []
         for ref in refs:
             if schema_type == "qualityGate":
@@ -434,13 +434,13 @@ class QueryProcessor:
                 summary = await self._create_cluster_summary_for_env(ref)
             else:
                 summary = await self._create_generic_summary(ref)
-            
+
             instances.append({
                 "name": ref.get("name", "unknown"),
                 "namespace": ref.get("namespace", "default"),
                 "summary": summary
             })
-        
+
         platform_context["availableSchemas"][schema_type] = {
             "metadata": {
                 "apiVersion": schema_info.api_version,
@@ -463,10 +463,10 @@ class QueryProcessor:
         schema_info = self.schema_registry.get_schema_info(actual_schema_name)
         if not schema_info:
             return
-        
+
         ref_key = f"{schema_type}Refs"
         refs = context.get("references", {}).get(ref_key, [])
-        
+
         instances = []
         for ref in refs:
             summary = await self._create_generic_summary(ref)
@@ -475,7 +475,7 @@ class QueryProcessor:
                 "namespace": ref.get("namespace", "default"),
                 "summary": summary
             })
-        
+
         platform_context["availableSchemas"][schema_type] = {
             "metadata": {
                 "apiVersion": schema_info.api_version,
@@ -566,12 +566,12 @@ class QueryProcessor:
             "githubApp": "XGitHubApp",
             "app": "XApp"
         }
-        
+
         return schema_name_mapping.get(requested_name, requested_name)
-    
+
     async def _process_schemas_parallel(
-        self, 
-        schema_types: list[str], 
+        self,
+        schema_types: list[str],
         context: dict[str, Any],
         platform_context: dict[str, Any],
         resource_category: str
@@ -586,11 +586,11 @@ class QueryProcessor:
         """
         if not self.performance_optimizer or not schema_types:
             return
-        
+
         # Define processor function based on resource category
         async def process_single_schema(schema_type: str) -> tuple[str, dict[str, Any]]:
             temp_context = {"availableSchemas": {}}
-            
+
             if resource_category == "app":
                 await self._process_schema_for_app(schema_type, context, temp_context)
             elif resource_category == "kubesystem":
@@ -599,25 +599,25 @@ class QueryProcessor:
                 await self._process_schema_for_kubenv(schema_type, context, temp_context)
             else:
                 await self._process_schema_generic(schema_type, context, temp_context)
-            
+
             return schema_type, temp_context.get("availableSchemas", {}).get(schema_type)
-        
+
         # Process schemas in parallel
         try:
             import asyncio
             tasks = [process_single_schema(schema_type) for schema_type in schema_types]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             # Merge results into platform_context
             for result in results:
                 if isinstance(result, Exception):
                     self.logger.warning(f"Schema processing error: {result}")
                     continue
-                
+
                 schema_type, schema_data = result
                 if schema_data:
                     platform_context["availableSchemas"][schema_type] = schema_data
-                    
+
         except Exception as e:
             self.logger.error(f"Parallel schema processing failed: {e}")
             raise

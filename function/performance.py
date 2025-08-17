@@ -7,11 +7,12 @@ to optimize function response times and resource usage.
 from __future__ import annotations
 
 import asyncio
-import time
 import logging
-from typing import List, Dict, Any, Callable
+import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -27,7 +28,7 @@ class PerformanceMetrics:
 
 class PerformanceOptimizer:
     """Performance optimizer with parallel processing and monitoring."""
-    
+
     def __init__(self, max_workers: int = 4, timeout_seconds: float = 30.0):
         """Initialize performance optimizer.
         
@@ -40,10 +41,10 @@ class PerformanceOptimizer:
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.metrics = PerformanceMetrics()
         self.logger = logging.getLogger(__name__)
-    
-    async def resolve_references_parallel(self, 
-                                        references: List[Dict[str, Any]], 
-                                        resolver_func: Callable) -> List[Dict[str, Any]]:
+
+    async def resolve_references_parallel(self,
+                                        references: list[dict[str, Any]],
+                                        resolver_func: Callable) -> list[dict[str, Any]]:
         """Resolve resource references in parallel.
         
         Args:
@@ -55,30 +56,30 @@ class PerformanceOptimizer:
         """
         if not references:
             return []
-        
+
         start_time = time.time()
         self.metrics.parallel_operations += 1
-        
+
         try:
             loop = asyncio.get_event_loop()
-            
+
             # Create tasks for parallel execution
             tasks = [
                 loop.run_in_executor(
-                    self.executor, 
-                    self._safe_resolve_reference, 
-                    ref, 
+                    self.executor,
+                    self._safe_resolve_reference,
+                    ref,
                     resolver_func
                 )
                 for ref in references
             ]
-            
+
             # Execute with timeout
             resolved_refs = await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True),
                 timeout=self.timeout_seconds
             )
-            
+
             # Filter out exceptions and log them
             results = []
             for i, result in enumerate(resolved_refs):
@@ -89,13 +90,13 @@ class PerformanceOptimizer:
                     results.append({"error": str(result), "index": i})
                 else:
                     results.append(result)
-            
+
             duration = time.time() - start_time
             self.logger.debug(f"Resolved {len(references)} references in {duration:.3f}s")
-            
+
             return results
-            
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             self.logger.error(f"Reference resolution timed out after {self.timeout_seconds}s")
             self.metrics.errors += 1
             raise
@@ -103,9 +104,9 @@ class PerformanceOptimizer:
             self.logger.error(f"Error in parallel reference resolution: {e}")
             self.metrics.errors += 1
             raise
-    
-    def _safe_resolve_reference(self, reference: Dict[str, Any], 
-                              resolver_func: Callable) -> Dict[str, Any]:
+
+    def _safe_resolve_reference(self, reference: dict[str, Any],
+                              resolver_func: Callable) -> dict[str, Any]:
         """Safely resolve a single reference with error handling.
         
         Args:
@@ -120,10 +121,10 @@ class PerformanceOptimizer:
         except Exception as e:
             self.logger.warning(f"Failed to resolve reference {reference}: {e}")
             return {"error": str(e), "reference": reference}
-    
-    async def process_schemas_parallel(self, 
-                                     schema_names: List[str], 
-                                     processor_func: Callable) -> Dict[str, Any]:
+
+    async def process_schemas_parallel(self,
+                                     schema_names: list[str],
+                                     processor_func: Callable) -> dict[str, Any]:
         """Process multiple schemas in parallel.
         
         Args:
@@ -135,12 +136,12 @@ class PerformanceOptimizer:
         """
         if not schema_names:
             return {}
-        
+
         start_time = time.time()
-        
+
         try:
             loop = asyncio.get_event_loop()
-            
+
             # Create tasks for parallel schema processing
             tasks = {
                 name: loop.run_in_executor(
@@ -151,14 +152,14 @@ class PerformanceOptimizer:
                 )
                 for name in schema_names
             }
-            
+
             # Wait for all tasks to complete
             results = {}
             for name, task in tasks.items():
                 try:
                     result = await asyncio.wait_for(task, timeout=self.timeout_seconds)
                     results[name] = result
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning(f"Schema processing timed out for {name}")
                     results[name] = {"error": "timeout"}
                     self.metrics.errors += 1
@@ -166,19 +167,19 @@ class PerformanceOptimizer:
                     self.logger.warning(f"Error processing schema {name}: {e}")
                     results[name] = {"error": str(e)}
                     self.metrics.errors += 1
-            
+
             duration = time.time() - start_time
             self.logger.debug(f"Processed {len(schema_names)} schemas in {duration:.3f}s")
-            
+
             return results
-            
+
         except Exception as e:
             self.logger.error(f"Error in parallel schema processing: {e}")
             self.metrics.errors += 1
             raise
-    
-    def _safe_process_schema(self, schema_name: str, 
-                           processor_func: Callable) -> Dict[str, Any]:
+
+    def _safe_process_schema(self, schema_name: str,
+                           processor_func: Callable) -> dict[str, Any]:
         """Safely process a single schema with error handling.
         
         Args:
@@ -193,7 +194,7 @@ class PerformanceOptimizer:
         except Exception as e:
             self.logger.warning(f"Failed to process schema {schema_name}: {e}")
             return {"error": str(e), "schema": schema_name}
-    
+
     def measure_performance(self, func: Callable) -> Callable:
         """Decorator to measure function performance.
         
@@ -208,28 +209,28 @@ class PerformanceOptimizer:
             try:
                 result = func(*args, **kwargs)
                 duration = time.time() - start_time
-                
+
                 # Update metrics
                 self.metrics.total_queries += 1
                 self.metrics.avg_response_time = (
                     (self.metrics.avg_response_time * (self.metrics.total_queries - 1) + duration)
                     / self.metrics.total_queries
                 )
-                
+
                 self.logger.debug(f"Function {func.__name__} completed in {duration:.3f}s")
                 return result
-                
+
             except Exception as e:
                 self.metrics.errors += 1
                 self.logger.error(f"Error in {func.__name__}: {e}")
                 raise
-        
+
         return wrapper
-    
-    async def batch_process(self, 
-                          items: List[Any], 
+
+    async def batch_process(self,
+                          items: list[Any],
                           processor: Callable,
-                          batch_size: int = 10) -> List[Any]:
+                          batch_size: int = 10) -> list[Any]:
         """Process items in batches to control resource usage.
         
         Args:
@@ -242,13 +243,13 @@ class PerformanceOptimizer:
         """
         if not items:
             return []
-        
+
         results = []
-        
+
         for i in range(0, len(items), batch_size):
             batch = items[i:i + batch_size]
             self.logger.debug(f"Processing batch {i//batch_size + 1} of {len(batch)} items")
-            
+
             try:
                 # Process batch in parallel
                 loop = asyncio.get_event_loop()
@@ -256,16 +257,16 @@ class PerformanceOptimizer:
                     loop.run_in_executor(self.executor, processor, item)
                     for item in batch
                 ]
-                
+
                 batch_results = await asyncio.wait_for(
                     asyncio.gather(*batch_tasks, return_exceptions=True),
                     timeout=self.timeout_seconds
                 )
-                
+
                 results.extend(batch_results)
-                
-            except asyncio.TimeoutError:
-                self.logger.error(f"Batch processing timed out")
+
+            except TimeoutError:
+                self.logger.error("Batch processing timed out")
                 self.metrics.errors += 1
                 # Add placeholder results for failed batch
                 results.extend([{"error": "timeout"} for _ in batch])
@@ -273,10 +274,10 @@ class PerformanceOptimizer:
                 self.logger.error(f"Error in batch processing: {e}")
                 self.metrics.errors += 1
                 results.extend([{"error": str(e)} for _ in batch])
-        
+
         return results
-    
-    def get_metrics(self) -> Dict[str, Any]:
+
+    def get_metrics(self) -> dict[str, Any]:
         """Get current performance metrics.
         
         Returns:
@@ -284,10 +285,10 @@ class PerformanceOptimizer:
         """
         cache_total = self.metrics.cache_hits + self.metrics.cache_misses
         cache_hit_rate = (
-            self.metrics.cache_hits / cache_total 
+            self.metrics.cache_hits / cache_total
             if cache_total > 0 else 0.0
         )
-        
+
         return {
             "total_queries": self.metrics.total_queries,
             "avg_response_time": self.metrics.avg_response_time,
@@ -297,7 +298,7 @@ class PerformanceOptimizer:
             "max_workers": self.max_workers,
             "timeout_seconds": self.timeout_seconds
         }
-    
+
     def update_cache_metrics(self, hit: bool) -> None:
         """Update cache hit/miss metrics.
         
@@ -308,14 +309,14 @@ class PerformanceOptimizer:
             self.metrics.cache_hits += 1
         else:
             self.metrics.cache_misses += 1
-    
+
     def reset_metrics(self) -> None:
         """Reset all performance metrics."""
         self.metrics = PerformanceMetrics()
         self.logger.info("Performance metrics reset")
-    
+
     def cleanup(self) -> None:
         """Clean up resources."""
-        if hasattr(self, 'executor'):
+        if hasattr(self, "executor"):
             self.executor.shutdown(wait=True)
             self.logger.info("Performance optimizer cleaned up")
