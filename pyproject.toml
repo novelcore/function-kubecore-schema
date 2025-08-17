@@ -56,7 +56,7 @@ config-path = "none"           # Disable Hatch's default Ruff config.
 
 [tool.ruff]
 target-version = "py311"
-exclude = ["function/proto/*"]
+exclude = ["function/proto/*", "validate_*.py"]
 
 [tool.ruff.lint]
 select = [
