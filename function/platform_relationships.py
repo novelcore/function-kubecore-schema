@@ -15,7 +15,7 @@ PLATFORM_HIERARCHY: dict[str, list[str]] = {
         "XKubeNet",
         "XKubeSystem",
     ],
-    "XKubeSystem": ["XKubeCluster", "XGitHubProject", "XKubeNet", "XGitHubProvider"],
+    "XKubeSystem": ["XKubeCluster", "XKubEnv", "XGitHubProject", "XKubeNet", "XGitHubProvider"],
     "XKubEnv": ["XKubeCluster", "XQualityGate", "XGitHubProject", "XKubeNet"],
     "XKubeCluster": ["XGitHubProject", "XKubeNet", "XGitHubProvider"],
     "XGitHubProject": ["XGitHubProvider"],

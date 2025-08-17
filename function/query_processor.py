@@ -75,11 +75,17 @@ class QueryProcessor:
         accessible_schemas = self.schema_registry.get_accessible_schemas("XApp")
         requested_schemas = query.get("requestedSchemas", [])
         
-        # Filter to only requested schemas that are accessible
-        target_schemas = [
-            schema for schema in requested_schemas 
-            if schema in accessible_schemas
-        ]
+        self.logger.debug(f"XApp accessible schemas: {accessible_schemas}")
+        self.logger.debug(f"XApp requested schemas: {requested_schemas}")
+        
+        # Map requested schema names to actual schema names and check accessibility
+        target_schemas = []
+        for schema in requested_schemas:
+            actual_schema_name = self._map_requested_to_actual_schema(schema)
+            if actual_schema_name in accessible_schemas:
+                target_schemas.append(schema)
+        
+        self.logger.debug(f"XApp target schemas: {target_schemas}")
         
         # Build platform context
         platform_context = {
@@ -98,6 +104,13 @@ class QueryProcessor:
             await self._process_schema_for_app(
                 schema_type, context, platform_context
             )
+        
+        # Also process schemas even if no references exist (for empty reference test)
+        for schema_type in requested_schemas:
+            if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
+                await self._process_schema_for_app(
+                    schema_type, context, platform_context
+                )
         
         # Add XApp-specific relationship information
         platform_context["relationships"]["direct"].extend([
@@ -126,10 +139,17 @@ class QueryProcessor:
         accessible_schemas = self.schema_registry.get_accessible_schemas("XKubeSystem")
         requested_schemas = query.get("requestedSchemas", [])
         
-        target_schemas = [
-            schema for schema in requested_schemas 
-            if schema in accessible_schemas
-        ]
+        self.logger.debug(f"XKubeSystem accessible schemas: {accessible_schemas}")
+        self.logger.debug(f"XKubeSystem requested schemas: {requested_schemas}")
+        
+        # Map requested schema names to actual schema names and check accessibility
+        target_schemas = []
+        for schema in requested_schemas:
+            actual_schema_name = self._map_requested_to_actual_schema(schema)
+            if actual_schema_name in accessible_schemas:
+                target_schemas.append(schema)
+        
+        self.logger.debug(f"XKubeSystem target schemas: {target_schemas}")
         
         platform_context = {
             "requestor": {
@@ -147,6 +167,13 @@ class QueryProcessor:
             await self._process_schema_for_kubesystem(
                 schema_type, context, platform_context
             )
+        
+        # Also process schemas even if no references exist
+        for schema_type in requested_schemas:
+            if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
+                await self._process_schema_for_kubesystem(
+                    schema_type, context, platform_context
+                )
         
         # Add XKubeSystem-specific relationships
         platform_context["relationships"]["direct"].extend([
@@ -175,10 +202,17 @@ class QueryProcessor:
         accessible_schemas = self.schema_registry.get_accessible_schemas("XKubEnv")
         requested_schemas = query.get("requestedSchemas", [])
         
-        target_schemas = [
-            schema for schema in requested_schemas 
-            if schema in accessible_schemas
-        ]
+        self.logger.debug(f"XKubEnv accessible schemas: {accessible_schemas}")
+        self.logger.debug(f"XKubEnv requested schemas: {requested_schemas}")
+        
+        # Map requested schema names to actual schema names and check accessibility
+        target_schemas = []
+        for schema in requested_schemas:
+            actual_schema_name = self._map_requested_to_actual_schema(schema)
+            if actual_schema_name in accessible_schemas:
+                target_schemas.append(schema)
+        
+        self.logger.debug(f"XKubEnv target schemas: {target_schemas}")
         
         platform_context = {
             "requestor": {
@@ -196,6 +230,13 @@ class QueryProcessor:
             await self._process_schema_for_kubenv(
                 schema_type, context, platform_context
             )
+        
+        # Also process schemas even if no references exist
+        for schema_type in requested_schemas:
+            if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
+                await self._process_schema_for_kubenv(
+                    schema_type, context, platform_context
+                )
         
         # Add XKubEnv-specific relationships
         platform_context["relationships"]["direct"].extend([
@@ -243,6 +284,13 @@ class QueryProcessor:
             await self._process_schema_generic(
                 schema_type, context, platform_context
             )
+        
+        # Also process schemas even if no references exist
+        for schema_type in requested_schemas:
+            if schema_type not in platform_context["availableSchemas"] and schema_type in accessible_schemas:
+                await self._process_schema_generic(
+                    schema_type, context, platform_context
+                )
         
         return platform_context
 
