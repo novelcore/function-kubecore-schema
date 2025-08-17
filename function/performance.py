@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 import time
 import logging
-from typing import List, Dict, Any, Optional, Callable, Awaitable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Any, Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 
