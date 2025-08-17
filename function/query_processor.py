@@ -7,7 +7,8 @@ and context-driven response generation.
 from __future__ import annotations
 
 import logging
-from typing import Any
+import time
+from typing import Any, Optional
 
 from .resource_resolver import ResourceResolver
 from .schema_registry import SchemaRegistry
@@ -34,9 +35,13 @@ class QueryProcessor:
         self.resource_resolver = resource_resolver
         self.resource_summarizer = resource_summarizer
         self.logger = logging.getLogger(__name__)
+        
+        # Phase 4 components (set by main function)
+        self.cache: Optional[Any] = None
+        self.performance_optimizer: Optional[Any] = None
 
     async def process_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
-        """Process query and generate response.
+        """Process query and generate response with Phase 4 optimizations.
         
         Args:
             input_spec: Input specification containing query and context
@@ -44,6 +49,7 @@ class QueryProcessor:
         Returns:
             Processed platform context response
         """
+        start_time = time.time()
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
         
@@ -51,17 +57,27 @@ class QueryProcessor:
         if not resource_type:
             raise ValueError("resourceType is required in query")
 
-        self.logger.info(f"Processing query for resource type: {resource_type}")
+        self.logger.debug(f"Processing query for resource type: {resource_type}")
 
         # Route to specific processing logic based on resource type
-        if resource_type == "XApp":
-            return await self._process_app_query(input_spec)
-        elif resource_type == "XKubeSystem":
-            return await self._process_kubesystem_query(input_spec)
-        elif resource_type == "XKubEnv":
-            return await self._process_kubenv_query(input_spec)
-        else:
-            return await self._process_generic_query(input_spec)
+        try:
+            if resource_type == "XApp":
+                result = await self._process_app_query(input_spec)
+            elif resource_type == "XKubeSystem":
+                result = await self._process_kubesystem_query(input_spec)
+            elif resource_type == "XKubEnv":
+                result = await self._process_kubenv_query(input_spec)
+            else:
+                result = await self._process_generic_query(input_spec)
+            
+            duration = time.time() - start_time
+            self.logger.debug(f"Query processing completed in {duration*1000:.1f}ms")
+            return result
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            self.logger.error(f"Query processing failed after {duration*1000:.1f}ms: {e}")
+            raise
 
     async def _process_app_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
         """Process XApp-specific query.
@@ -99,11 +115,26 @@ class QueryProcessor:
             "insights": {}
         }
         
-        # Process each requested schema
-        for schema_type in target_schemas:
-            await self._process_schema_for_app(
-                schema_type, context, platform_context
-            )
+        # Process schemas in parallel for better performance
+        if target_schemas and self.performance_optimizer:
+            try:
+                # Use parallel processing for multiple schemas
+                await self._process_schemas_parallel(
+                    target_schemas, context, platform_context, "app"
+                )
+            except Exception as e:
+                self.logger.warning(f"Parallel schema processing failed, falling back to sequential: {e}")
+                # Fallback to sequential processing
+                for schema_type in target_schemas:
+                    await self._process_schema_for_app(
+                        schema_type, context, platform_context
+                    )
+        else:
+            # Sequential processing fallback
+            for schema_type in target_schemas:
+                await self._process_schema_for_app(
+                    schema_type, context, platform_context
+                )
         
         # Also process schemas even if no references exist (for empty reference test)
         for schema_type in requested_schemas:
@@ -537,3 +568,56 @@ class QueryProcessor:
         }
         
         return schema_name_mapping.get(requested_name, requested_name)
+    
+    async def _process_schemas_parallel(
+        self, 
+        schema_types: list[str], 
+        context: dict[str, Any],
+        platform_context: dict[str, Any],
+        resource_category: str
+    ) -> None:
+        """Process multiple schemas in parallel using the performance optimizer.
+        
+        Args:
+            schema_types: List of schema types to process
+            context: Request context
+            platform_context: Platform context to update
+            resource_category: Category of resource (app, kubesystem, kubenv, generic)
+        """
+        if not self.performance_optimizer or not schema_types:
+            return
+        
+        # Define processor function based on resource category
+        async def process_single_schema(schema_type: str) -> tuple[str, dict[str, Any]]:
+            temp_context = {"availableSchemas": {}}
+            
+            if resource_category == "app":
+                await self._process_schema_for_app(schema_type, context, temp_context)
+            elif resource_category == "kubesystem":
+                await self._process_schema_for_kubesystem(schema_type, context, temp_context)
+            elif resource_category == "kubenv":
+                await self._process_schema_for_kubenv(schema_type, context, temp_context)
+            else:
+                await self._process_schema_generic(schema_type, context, temp_context)
+            
+            return schema_type, temp_context.get("availableSchemas", {}).get(schema_type)
+        
+        # Process schemas in parallel
+        try:
+            import asyncio
+            tasks = [process_single_schema(schema_type) for schema_type in schema_types]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Merge results into platform_context
+            for result in results:
+                if isinstance(result, Exception):
+                    self.logger.warning(f"Schema processing error: {result}")
+                    continue
+                
+                schema_type, schema_data = result
+                if schema_data:
+                    platform_context["availableSchemas"][schema_type] = schema_data
+                    
+        except Exception as e:
+            self.logger.error(f"Parallel schema processing failed: {e}")
+            raise

@@ -1,0 +1,126 @@
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-kubecore-platform-context
+  namespace: crossplane-system
+spec:
+  package: xpkg.upbound.io/kubecore/function-platform-context:v1.0.0
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 1
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: function-kubecore-config
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: function-kubecore-config
+  namespace: crossplane-system
+spec:
+  serviceAccount:
+    name: function-kubecore-platform-context
+  deploymentTemplate:
+    spec:
+      replicas: 2
+      selector: {}
+      template:
+        spec:
+          containers:
+          - name: package-runtime
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "128Mi"
+              limits:
+                cpu: "500m"
+                memory: "256Mi"
+            env:
+            - name: CACHE_TTL_SECONDS
+              value: "300"
+            - name: CACHE_MAX_ENTRIES
+              value: "1000"
+            - name: MAX_WORKERS
+              value: "4"
+            - name: TIMEOUT_SECONDS
+              value: "30"
+            - name: LOG_LEVEL
+              value: "INFO"
+            volumeMounts:
+            - name: function-config
+              mountPath: /config
+              readOnly: true
+          volumes:
+          - name: function-config
+            configMap:
+              name: function-kubecore-config
+              optional: true
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: function-kubecore-platform-context
+  namespace: crossplane-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: function-kubecore-platform-context
+rules:
+- apiGroups: ["platform.kubecore.io"]
+  resources: ["xkubenenvs", "kubenvs"]
+  verbs: ["get", "list"]
+- apiGroups: ["github.platform.kubecore.io"]
+  resources: ["xgithubprojects", "githubprojects"]
+  verbs: ["get", "list"]
+- apiGroups: ["quality.platform.kubecore.io"]
+  resources: ["xqualitygates", "qualitygates"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: function-kubecore-platform-context
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: function-kubecore-platform-context
+subjects:
+- kind: ServiceAccount
+  name: function-kubecore-platform-context
+  namespace: crossplane-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: function-kubecore-config
+  namespace: crossplane-system
+data:
+  config.yaml: |
+    cache:
+      ttl_seconds: 300
+      max_entries: 1000
+    performance:
+      max_workers: 4
+      timeout_seconds: 30
+    logging:
+      level: INFO
+      format: json
+    features:
+      parallel_processing: true
+      intelligent_caching: true
+      performance_monitoring: true
+  schemas.yaml: |
+    # Schema definitions for context resolution
+    supported_schemas:
+      kubEnv:
+        description: "Kubernetes environment configuration"
+        required_fields: ["name", "cluster", "namespace"]
+      qualityGate:
+        description: "Quality gate configuration"  
+        required_fields: ["name", "criteria", "threshold"]
+      githubProject:
+        description: "GitHub project configuration"
+        required_fields: ["name", "repository", "branch"]

@@ -1,18 +1,49 @@
 ---
-apiVersion: meta.pkg.crossplane.io/v1beta1
+apiVersion: meta.pkg.crossplane.io/v1
 kind: Function
 metadata:
-  name: function-function-kubecore-schema
+  name: function-kubecore-platform-context
+  annotations:
+    meta.crossplane.io/maintainer: KubeCore Team <team@kubecore.eu>
+    meta.crossplane.io/source: github.com/kubecore/function-kubecore-platform-context
+    meta.crossplane.io/license: Apache-2.0
+    meta.crossplane.io/description: |
+      Provides intelligent, context-aware schema resolution for KubeCore platform compositions.
+      Enables compositions to access platform schemas and relationships without complex resource lookups.
+    meta.crossplane.io/readme: |
+      # KubeCore Platform Context Function
+      
+      This function provides intelligent schema resolution for KubeCore platform compositions by:
+      - Resolving resource relationships and dependencies
+      - Providing filtered schemas based on requesting resource type
+      - Generating insights and recommendations
+      - Optimizing composition template complexity
+      
+      ## Usage
+      ```yaml
+      - step: get-platform-context
+        functionRef:
+          name: function-kubecore-platform-context
+        input:
+          apiVersion: context.fn.kubecore.io/v1beta1
+          kind: Input
+          spec:
+            query:
+              resourceType: "XApp"
+              requestedSchemas: ["kubEnv", "qualityGate"]
+      ```
 spec:
-  # Minimal RBAC for read-only cluster lookups performed by the function runtime.
+  crossplane:
+    version: ">=v1.14.0"
+  # RBAC for read-only cluster lookups performed by the function runtime.
   permissions:
     rules:
     - apiGroups: ["platform.kubecore.io"]
-      resources: ["xkubenenvs"]
-      verbs: ["get", "list"]
-    - apiGroups: ["platform.kubecore.io"]
-      resources: ["kubenvs"]
+      resources: ["xkubenenvs", "kubenvs"]
       verbs: ["get", "list"]
     - apiGroups: ["github.platform.kubecore.io"]
-      resources: ["xgithubprojects"]
+      resources: ["xgithubprojects", "githubprojects"]
+      verbs: ["get", "list"]
+    - apiGroups: ["quality.platform.kubecore.io"]
+      resources: ["xqualitygates", "qualitygates"]
       verbs: ["get", "list"]
