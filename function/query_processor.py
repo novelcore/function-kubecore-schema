@@ -84,15 +84,8 @@ class QueryProcessor:
                 await self._perform_reverse_discovery(result, context)
             
             # Perform transitive discovery if enabled and engine available
-            transitive_enabled = context.get("enableTransitiveDiscovery", True)
-            has_engine = self.transitive_discovery_engine is not None
-            self.logger.info(f"Transitive discovery check: enabled={transitive_enabled}, has_engine={has_engine}")
-            
-            if transitive_enabled and has_engine:
-                self.logger.info(f"Starting transitive discovery for {resource_type}")
+            if context.get("enableTransitiveDiscovery", True) and self.transitive_discovery_engine:
                 await self._perform_transitive_discovery(result, context, resource_type)
-            else:
-                self.logger.info(f"Skipping transitive discovery: enabled={transitive_enabled}, has_engine={has_engine}")
 
             duration = time.time() - start_time
             self.logger.debug(f"Query processing completed in {duration*1000:.1f}ms")

@@ -73,6 +73,27 @@ class KubeCoreContextFunction:
         self.logger.debug("Initializing core components")
         self.schema_registry = SchemaRegistry()
         self.k8s_client = K8sClient()
+        # Connect to Kubernetes cluster - this must be done synchronously during init
+        try:
+            # Run the async connect method synchronously during initialization
+            import asyncio
+            loop = None
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+            
+            if loop is not None:
+                # We're in an async context - create a task
+                asyncio.create_task(self._connect_k8s_client())
+            else:
+                # We're not in async context - run it directly
+                asyncio.run(self.k8s_client.connect())
+                self.logger.debug("K8s client connected successfully")
+        except Exception as e:
+            self.logger.warning(f"K8s client connection failed during init: {e}")
+            # Continue initialization - connection will be attempted later if needed
+        
         self.resource_resolver = ResourceResolver(self.k8s_client)
         self.resource_summarizer = ResourceSummarizer(self.k8s_client)
         self.logger.debug("Core components initialized")
@@ -107,6 +128,14 @@ class KubeCoreContextFunction:
         self.query_processor.performance_optimizer = self.performance_optimizer
         self.query_processor.set_transitive_discovery_engine(self.transitive_discovery_engine)
         self.logger.info("KubeCoreContextFunction initialization complete")
+
+    async def _connect_k8s_client(self) -> None:
+        """Connect K8s client asynchronously during initialization."""
+        try:
+            await self.k8s_client.connect()
+            self.logger.debug("K8s client connected successfully (async)")
+        except Exception as e:
+            self.logger.warning(f"K8s client connection failed (async): {e}")
 
     async def run_function_async(self, request: dict[str, Any]) -> dict[str, Any]:
         """Async main function entry point for context resolution with Phase 4 optimizations."""
@@ -159,6 +188,16 @@ class KubeCoreContextFunction:
             "context": context
         }
         self.logger.debug(f"Prepared processing input with query and context")
+
+        # Ensure K8s client is connected for transitive discovery
+        if not self.k8s_client._connected:
+            self.logger.debug("K8s client not connected, attempting connection")
+            try:
+                await self.k8s_client.connect()
+                self.logger.debug("K8s client connected successfully")
+            except Exception as e:
+                self.logger.warning(f"K8s client connection failed: {e}")
+                # Continue with limited functionality
 
         # Phase 3: Process query with intelligent logic (now with performance optimizations)
         self.logger.debug("Starting query processing")
