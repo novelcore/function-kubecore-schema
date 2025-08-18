@@ -1,0 +1,27 @@
+# Test without transitive discovery
+apiVersion: test.kubecore.io/v1alpha1
+kind: TransitiveDiscoveryTest
+metadata:
+  name: test-without-transitive
+  namespace: default
+spec:
+  compositionRef:
+    name: simple-transitive-test
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  testTransitiveDiscovery: false
+---
+# Test with transitive discovery enabled
+apiVersion: test.kubecore.io/v1alpha1
+kind: TransitiveDiscoveryTest
+metadata:
+  name: test-with-transitive
+  namespace: default
+spec:
+  compositionRef:
+    name: transitive-enabled-test
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  testTransitiveDiscovery: true

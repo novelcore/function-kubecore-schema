@@ -1,0 +1,12 @@
+apiVersion: test.kubecore.io/v1alpha1
+kind: TransitiveDiscoveryTest
+metadata:
+  name: test-simple-transitive
+  namespace: default
+spec:
+  compositionRef:
+    name: simple-transitive-test
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  testTransitiveDiscovery: true

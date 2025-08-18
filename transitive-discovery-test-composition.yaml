@@ -1,0 +1,128 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xtransitivediscoverytests.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XTransitiveDiscoveryTest
+    plural: xtransitivediscoverytests
+  claimNames:
+    kind: TransitiveDiscoveryTest
+    plural: transitivediscoverytests
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              githubProjectRef:
+                type: object
+                description: "Reference to the GitHub project for transitive discovery testing"
+                properties:
+                  name:
+                    type: string
+                    description: "Name of the GitHub project"
+                  namespace:
+                    type: string
+                    description: "Namespace of the GitHub project"
+                required:
+                - name
+                - namespace
+              testTransitiveDiscovery:
+                type: boolean
+                description: "Enable transitive discovery testing"
+                default: true
+            required:
+            - githubProjectRef
+          status:
+            type: object
+            properties:
+              discoveryResults:
+                type: object
+                description: "Results from transitive discovery"
+                additionalProperties:
+                  type: object
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: transitive-discovery-test
+  labels:
+    provider: kubecore
+    service: transitive-discovery-test
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTransitiveDiscoveryTest
+  
+  mode: Pipeline
+  pipeline:
+  - step: kubecore-context-resolution
+    functionRef:
+      name: function-kubecore-schema
+    input:
+      apiVersion: context.fn.kubecore.io/v1beta1
+      kind: ContextInput
+      spec:
+        # This is the key test - we provide only the GitHub project reference
+        # The function should discover XKubeCluster, XKubEnv, and XApp transitively
+        query:
+          resourceType: XGitHubProject
+          requestedSchemas:
+          - kubeCluster      # Should be found via 1-hop: githubProjectRef
+          - kubEnv           # Should be found via 2-hop: githubProjectRef → kubeClusterRef
+          - app              # Should be found via 3-hop: githubProjectRef → kubeClusterRef → kubenvRef
+          - kubeSystem       # Should be found via 2-hop: githubProjectRef → kubeClusterRef
+        context:
+          requestorName: demo-project
+          requestorNamespace: test
+          enableTransitiveDiscovery: true
+          transitiveMaxDepth: 3
+          references:
+            githubProjectRefs:
+            - name: demo-project
+              namespace: test
+              apiVersion: github.platform.kubecore.io/v1alpha1
+              kind: XGitHubProject
+  
+  - step: create-test-result
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - name: test-result-configmap
+        base:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: transitive-discovery-test-result
+          data:
+            testStatus: "completed"
+            testDescription: "Transitive discovery test for GitHub project demo-project"
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - type: string
+            string:
+              fmt: "%s-result"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.githubProjectRef.name
+          toFieldPath: data.githubProject
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.githubProjectRef.namespace
+          toFieldPath: data.githubProjectNamespace

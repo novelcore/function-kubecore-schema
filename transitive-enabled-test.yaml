@@ -1,0 +1,117 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: transitive-enabled-test
+  labels:
+    provider: kubecore
+    service: transitive-discovery-test
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTransitiveDiscoveryTest
+  
+  mode: Pipeline
+  pipeline:
+  - step: kubecore-context-resolution
+    functionRef:
+      name: function-kubecore-schema
+    input:
+      apiVersion: context.fn.kubecore.io/v1beta1
+      kind: ContextInput
+      spec:
+        query:
+          resourceType: XGitHubProject
+          requestedSchemas:
+          - kubeCluster
+          - kubEnv
+          - app
+          - kubeSystem
+        context:
+          requestorName: demo-project
+          requestorNamespace: test
+          # NOW with transitive discovery enabled
+          enableTransitiveDiscovery: true
+          transitiveMaxDepth: 3
+          references:
+            githubProjectRefs:
+            - name: demo-project
+              namespace: test
+              apiVersion: github.platform.kubecore.io/v1alpha1
+              kind: XGitHubProject
+  
+  - step: debug-output-with-transitive
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - name: transitive-results-configmap
+        base:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: transitive-discovery-results-enabled
+            namespace: default
+          data:
+            status: "transitive discovery test completed"
+            resourceType: "XGitHubProject"
+            requestedSchemas: "kubeCluster,kubEnv,app,kubeSystem"
+            transitiveDiscoveryEnabled: "true"
+            transitiveMaxDepth: "3"
+        patches:
+        # Extract the complete platform context as JSON
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: context["context.fn.kubecore.io/platform-context"]
+          toFieldPath: data.platformContext
+          transforms:
+          - type: convert
+            convert:
+              toType: string
+          policy:
+            fromFieldPath: Optional
+        # Extract just the available schemas
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: context["context.fn.kubecore.io/platform-context"].availableSchemas
+          toFieldPath: data.availableSchemas
+          transforms:
+          - type: convert
+            convert:
+              toType: string
+          policy:
+            fromFieldPath: Optional
+        # Extract requestor information
+        - type: FromEnvironmentFieldPath  
+          fromFieldPath: context["context.fn.kubecore.io/platform-context"].requestor.name
+          toFieldPath: data.requestorName
+          policy:
+            fromFieldPath: Optional
+        # Extract relationship information
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: context["context.fn.kubecore.io/platform-context"].relationships
+          toFieldPath: data.relationships
+          transforms:
+          - type: convert
+            convert:
+              toType: string
+          policy:
+            fromFieldPath: Optional
+        # Count discovered schemas
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: context["context.fn.kubecore.io/platform-context"].availableSchemas
+          toFieldPath: data.schemaCount
+          transforms:
+          - type: map
+            map:
+              kubeCluster: "1"
+              kubEnv: "1" 
+              app: "1"
+              kubeSystem: "1"
+          policy:
+            fromFieldPath: Optional
+        # Add timestamp
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.creationTimestamp
+          toFieldPath: data.testTimestamp

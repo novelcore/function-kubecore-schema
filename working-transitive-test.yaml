@@ -1,0 +1,72 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: working-transitive-test
+  labels:
+    provider: kubecore
+    service: transitive-discovery-test
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XTransitiveDiscoveryTest
+  
+  mode: Pipeline
+  pipeline:
+  - step: kubecore-context-resolution
+    functionRef:
+      name: function-kubecore-schema
+    input:
+      apiVersion: context.fn.kubecore.io/v1beta1
+      kind: ContextInput
+      spec:
+        query:
+          resourceType: XGitHubProject
+          requestedSchemas:
+          - kubeCluster
+          - kubEnv
+          - app
+        context:
+          requestorName: demo-project
+          requestorNamespace: test
+          enableTransitiveDiscovery: true
+          transitiveMaxDepth: 3
+          references:
+            githubProjectRefs:
+            - name: demo-project
+              namespace: test
+              apiVersion: github.platform.kubecore.io/v1alpha1
+              kind: XGitHubProject
+  
+  - step: create-results-configmap
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - name: results-configmap
+        base:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            namespace: default
+          data:
+            test-status: "completed"
+            resource-type: "XGitHubProject"
+            requested-schemas: "kubeCluster,kubEnv,app"
+            transitive-discovery: "enabled"
+            github-project: "demo-project"
+            github-project-namespace: "test"
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - type: string
+            string:
+              fmt: "transitive-results-%s"
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.creationTimestamp
+          toFieldPath: data.test-timestamp

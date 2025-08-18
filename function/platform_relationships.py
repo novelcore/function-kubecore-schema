@@ -18,7 +18,7 @@ PLATFORM_HIERARCHY: dict[str, list[str]] = {
     "XKubeSystem": ["XKubeCluster", "XKubEnv", "XGitHubProject", "XKubeNet", "XGitHubProvider"],
     "XKubEnv": ["XKubeCluster", "XQualityGate", "XGitHubProject", "XKubeNet"],
     "XKubeCluster": ["XGitHubProject", "XKubeNet", "XGitHubProvider"],
-    "XGitHubProject": ["XGitHubProvider"],
+    "XGitHubProject": ["XGitHubProvider", "XKubeCluster", "XKubEnv", "XApp", "XKubeSystem", "XGitHubApp"],
     "XGitHubApp": ["XGitHubProject", "XGitHubProvider"],
     "XQualityGate": [
         # Quality gates are referenced by other resources, not the other way around
