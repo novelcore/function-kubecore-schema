@@ -204,11 +204,14 @@ class TransitiveDiscoveryEngine:
         
         # Process each relationship chain
         for target_kind, ref_chain in relationship_chains:
+            self.logger.debug(f"Processing relationship chain: {target_kind} via {ref_chain}")
+            
             if len(ref_chain) > max_depth:
+                self.logger.debug(f"Skipping chain {target_kind} - depth {len(ref_chain)} > max_depth {max_depth}")
                 continue
             
             # Check for early termination conditions
-            if self.config.early_termination_enabled:
+            if self.config.early_termination_enabled and len(discovered_resources) > 0:
                 total_discovered = sum(len(resources) for resources in discovered_resources.values())
                 if total_discovered >= self.config.max_resources_per_type * len(discovered_resources):
                     self.logger.info(f"Early termination: discovered {total_discovered} resources")
@@ -217,6 +220,7 @@ class TransitiveDiscoveryEngine:
             chain_resources = await self._traverse_relationship_chain(
                 target_ref, resource_type, target_kind, ref_chain, context
             )
+            self.logger.debug(f"Traversal result for {target_kind}: {len(chain_resources)} resources")
             
             if chain_resources:
                 schema_type = self._kind_to_schema_type(target_kind)
@@ -268,9 +272,11 @@ class TransitiveDiscoveryEngine:
         # Start with source resource
         current_resources = [source_ref]
         relationship_path = [self._dict_to_resource_ref(source_ref)]
+        self.logger.debug(f"Starting traversal with {len(current_resources)} resources: {[r.get('name') for r in current_resources]}")
         
         # Traverse each hop in the chain
         for hop_index, ref_field in enumerate(ref_chain):
+            self.logger.debug(f"Hop {hop_index + 1}/{len(ref_chain)}: Looking for {ref_field} references in {len(current_resources)} resources")
             try:
                 # Set timeout for this depth level
                 next_resources = await asyncio.wait_for(
@@ -409,11 +415,16 @@ class TransitiveDiscoveryEngine:
         search_configs = self._get_search_configs_for_ref_field(ref_field)
         found_resources = []
         
+        self.logger.debug(f"Searching for resources with {ref_field} referencing {target_name}/{target_namespace}")
+        self.logger.debug(f"Will search {len(search_configs)} resource types: {[kind for kind, _ in search_configs]}")
+        
         for kind, api_version in search_configs:
             try:
+                self.logger.debug(f"Searching {kind} resources with {ref_field} = {target_name}")
                 resources = await self._search_resources_with_ref(
                     kind, api_version, ref_field, target_name, target_namespace
                 )
+                self.logger.debug(f"Found {len(resources)} {kind} resources")
                 found_resources.extend(resources)
             except Exception as e:
                 self.logger.warning(f"Failed to search {kind} for {ref_field} references: {e}")
