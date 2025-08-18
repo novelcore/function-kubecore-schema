@@ -164,8 +164,9 @@ class K8sClient:
         for attempt in range(self.max_retries + 1):
             try:
                 # Execute the function in a thread pool
+                # Wrap in lambda to properly handle kwargs with run_in_executor
                 return await asyncio.get_event_loop().run_in_executor(
-                    None, func, *args, **kwargs
+                    None, lambda: func(*args, **kwargs)
                 )
             except ApiException as e:
                 last_exception = e
