@@ -23,6 +23,7 @@ class InsightsEngine:
         """
         self.schema_registry = schema_registry
         self.logger = logging.getLogger(__name__)
+        self.logger.debug("InsightsEngine initialized")
 
     def generate_insights(
         self,
@@ -38,6 +39,9 @@ class InsightsEngine:
         Returns:
             Dictionary containing insights, recommendations, and suggestions
         """
+        self.logger.debug(f"Generating insights for resource type: {resource_type}")
+        self.logger.debug(f"Platform context contains {len(platform_context.get('availableSchemas', {}))} schemas")
+        
         insights = {
             "suggestedReferences": [],
             "validationRules": [],

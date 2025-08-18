@@ -6,6 +6,7 @@ and their relationships according to the KubeCore platform hierarchy.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,14 +33,19 @@ class SchemaRegistry:
 
     def __init__(self):
         """Initialize the schema registry with platform schemas."""
+        self.logger = logging.getLogger(__name__)
         self.schemas: dict[str, ResourceSchema] = {}
         self.hierarchy: dict[str, list[str]] = {}
+        self.logger.debug("Initializing SchemaRegistry")
         self._load_platform_schemas()
+        self.logger.info(f"SchemaRegistry initialized with {len(self.schemas)} schemas and {len(self.hierarchy)} hierarchy entries")
 
     def _load_platform_schemas(self):
         """Load KubeCore platform schemas and relationships."""
+        self.logger.debug("Loading platform schemas and relationships")
         # Load platform hierarchy
         self.hierarchy = PLATFORM_HIERARCHY.copy()
+        self.logger.debug(f"Loaded hierarchy for {len(self.hierarchy)} resource types")
 
         # Load basic schema definitions
         # These would typically be loaded from actual XRD files or OpenAPI specs
@@ -352,14 +358,24 @@ class SchemaRegistry:
 
     def get_accessible_schemas(self, resource_type: str) -> list[str]:
         """Get schemas accessible to a resource type based on platform relationships."""
+        self.logger.debug(f"Getting accessible schemas for resource type: {resource_type}")
         if resource_type not in self.hierarchy:
+            self.logger.debug(f"Resource type '{resource_type}' not found in hierarchy")
             return []
 
-        return self.hierarchy[resource_type]
+        accessible = self.hierarchy[resource_type]
+        self.logger.debug(f"Found {len(accessible)} accessible schemas for {resource_type}: {accessible}")
+        return accessible
 
     def get_schema_info(self, resource_type: str) -> ResourceSchema | None:
         """Get schema information for a specific resource type."""
-        return self.schemas.get(resource_type)
+        self.logger.debug(f"Getting schema info for resource type: {resource_type}")
+        schema = self.schemas.get(resource_type)
+        if schema:
+            self.logger.debug(f"Found schema info for {resource_type}: {schema.api_version}/{schema.kind}")
+        else:
+            self.logger.debug(f"No schema info found for {resource_type}")
+        return schema
 
     def get_relationship_path(self, from_type: str, to_type: str) -> list[str]:
         """Get the relationship path from one resource type to another."""

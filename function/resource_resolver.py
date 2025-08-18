@@ -136,9 +136,12 @@ class ResourceResolver:
         self.cache = ResourceCache(cache_ttl)
         self.max_concurrent = max_concurrent
         self.logger = logging.getLogger(__name__)
+        
+        self.logger.debug(f"ResourceResolver initialized with cache_ttl={cache_ttl}s, max_concurrent={max_concurrent}")
 
         # Semaphore for controlling concurrent operations
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self.logger.debug("ResourceResolver initialization complete")
 
     async def resolve_resource(
         self,

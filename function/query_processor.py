@@ -35,6 +35,7 @@ class QueryProcessor:
         self.resource_resolver = resource_resolver
         self.resource_summarizer = resource_summarizer
         self.logger = logging.getLogger(__name__)
+        self.logger.debug("QueryProcessor initialized")
 
         # Phase 4 components (set by main function)
         self.cache: Any | None = None
@@ -52,12 +53,16 @@ class QueryProcessor:
         start_time = time.time()
         query = input_spec.get("query", {})
         context = input_spec.get("context", {})
+        
+        self.logger.debug(f"Processing query: {query}")
+        self.logger.debug(f"Context: {context}")
 
         resource_type = query.get("resourceType")
         if not resource_type:
+            self.logger.error("resourceType is required in query")
             raise ValueError("resourceType is required in query")
 
-        self.logger.debug(f"Processing query for resource type: {resource_type}")
+        self.logger.info(f"Processing query for resource type: {resource_type}")
 
         # Route to specific processing logic based on resource type
         try:
