@@ -126,6 +126,14 @@ class KubeCoreContextFunction:
         # Extract input specification
         input_spec = request.get("input", {}).get("spec", {})
         self.logger.debug(f"Input specification keys: {list(input_spec.keys())}")
+        
+        # Enhanced logging for debugging Crossplane input structure
+        self.logger.debug(f"Complete input structure keys: {list(request.get('input', {}).keys())}")
+        if 'context' in input_spec:
+            self.logger.debug(f"Found input.spec.context keys: {list(input_spec['context'].keys())}")
+            self.logger.debug(f"enableTransitiveDiscovery from input: {input_spec['context'].get('enableTransitiveDiscovery', 'NOT FOUND')}")
+        else:
+            self.logger.debug("No input.spec.context found - this explains why transitive discovery isn't working!")
 
         # Validate required structure
         if "query" not in input_spec:
@@ -134,10 +142,11 @@ class KubeCoreContextFunction:
         
         self.logger.debug("Input validation passed")
 
-        # Extract context from observed composite resource
-        self.logger.debug("Extracting context from observed composite resource")
-        context = self._extract_context(request)
+        # Extract context from both observed composite resource AND input.spec.context
+        self.logger.debug("Extracting context from observed composite resource and input.spec.context")
+        context = self._extract_context(request, input_spec)
         self.logger.debug(f"Extracted context: requestor={context.get('requestorName')}, namespace={context.get('requestorNamespace')}, references={len(context.get('references', {}))} ref types")
+        self.logger.debug(f"Final context enableTransitiveDiscovery: {context.get('enableTransitiveDiscovery', 'NOT SET')}")
 
         # Check cache first
         query = input_spec["query"]
@@ -236,9 +245,9 @@ class KubeCoreContextFunction:
             # No event loop running, safe to use asyncio.run()
             return asyncio.run(self.run_function_async(request))
 
-    def _extract_context(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Extract context information from the request."""
-        self.logger.debug("Extracting context from request")
+    def _extract_context(self, request: dict[str, Any], input_spec: dict[str, Any] = None) -> dict[str, Any]:
+        """Extract context information from both observed composite resource and input.spec.context."""
+        self.logger.debug("Extracting context from request and input spec")
         # Get observed composite resource
         observed = request.get("observed", {})
         composite = observed.get("composite", {})
@@ -289,6 +298,35 @@ class KubeCoreContextFunction:
             self.logger.debug(f"Added reverse discovery hints for {requestor_kind}: {requestor_name}")
         
         self.logger.debug(f"Extracted {ref_count} total references across {len(context['references'])} reference types")
+
+        # Merge input.spec.context data if available
+        if input_spec and 'context' in input_spec:
+            input_context = input_spec['context']
+            self.logger.debug(f"Merging input.spec.context with {len(input_context)} keys: {list(input_context.keys())}")
+            
+            # Key context flags from input.spec.context
+            if 'enableTransitiveDiscovery' in input_context:
+                context['enableTransitiveDiscovery'] = input_context['enableTransitiveDiscovery']
+                self.logger.debug(f"Set enableTransitiveDiscovery from input: {context['enableTransitiveDiscovery']}")
+            
+            if 'transitiveMaxDepth' in input_context:
+                context['transitiveMaxDepth'] = input_context['transitiveMaxDepth']
+                self.logger.debug(f"Set transitiveMaxDepth from input: {context['transitiveMaxDepth']}")
+            
+            # Merge additional references from input.spec.context
+            if 'references' in input_context and isinstance(input_context['references'], dict):
+                for ref_key, ref_value in input_context['references'].items():
+                    if ref_key not in context['references']:
+                        context['references'][ref_key] = ref_value
+                        self.logger.debug(f"Added reference from input.spec.context: {ref_key}")
+            
+            # Pass through any other context properties
+            for key, value in input_context.items():
+                if key not in context and key not in ['references']:  # Don't overwrite existing or already handled
+                    context[key] = value
+                    self.logger.debug(f"Added context property from input: {key} = {value}")
+        else:
+            self.logger.debug("No input.spec.context found to merge")
 
         return context
 

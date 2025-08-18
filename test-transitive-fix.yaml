@@ -1,0 +1,10 @@
+apiVersion: github.platform.kubecore.io/v1alpha1
+kind: XGitHubProject
+metadata:
+  name: test-transitive-fix
+  namespace: test
+spec:
+  compositionRef:
+    name: working-transitive-test
+  projectName: demo-project
+  namespace: test
