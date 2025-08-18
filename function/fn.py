@@ -117,6 +117,86 @@ class KubeCoreContextFunction:
         except Exception as e:
             self.logger.warning(f"K8s client connection failed (async): {e}")
 
+    def _inspect_input_structure(self, request: dict[str, Any]) -> None:
+        """Phase 1 Fix: Recursively inspect and log the complete input structure to find enableTransitiveDiscovery."""
+        self.logger.debug(f"=== COMPREHENSIVE INPUT STRUCTURE INSPECTION ===")
+        
+        # Search for enableTransitiveDiscovery flag specifically
+        transitive_flag_locations = []
+        self._find_transitive_flag(request, "request", transitive_flag_locations)
+        
+        if transitive_flag_locations:
+            self.logger.debug(f"🎯 FOUND enableTransitiveDiscovery at {len(transitive_flag_locations)} location(s):")
+            for location, value in transitive_flag_locations:
+                self.logger.debug(f"  ✅ {location} = {value}")
+        else:
+            self.logger.debug("❌ enableTransitiveDiscovery NOT FOUND anywhere in input")
+        
+        # Log the complete structure
+        self._log_structure_recursive(request, "request", max_depth=4)
+        self.logger.debug(f"=== END INPUT STRUCTURE INSPECTION ===")
+
+    def _find_transitive_flag(self, obj: Any, path: str, found_locations: list) -> None:
+        """Recursively search for enableTransitiveDiscovery flag in any object."""
+        if isinstance(obj, dict):
+            # Check if this dict directly contains the flag
+            if 'enableTransitiveDiscovery' in obj:
+                found_locations.append((f"{path}.enableTransitiveDiscovery", obj['enableTransitiveDiscovery']))
+            
+            # Recursively search in nested objects
+            for key, value in obj.items():
+                self._find_transitive_flag(value, f"{path}.{key}", found_locations)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj):
+                self._find_transitive_flag(item, f"{path}[{i}]", found_locations)
+
+    def _log_structure_recursive(self, obj: Any, path: str, current_depth: int = 0, max_depth: int = 4) -> None:
+        """Recursively log object structure with limited depth to avoid spam."""
+        if current_depth > max_depth:
+            self.logger.debug(f"{path}: <max depth reached>")
+            return
+            
+        if isinstance(obj, dict):
+            self.logger.debug(f"{path}: dict with keys {list(obj.keys())}")
+            for key, value in obj.items():
+                if key in ['enableTransitiveDiscovery', 'context', 'spec', 'input']:
+                    # Always log important keys regardless of depth
+                    self._log_structure_recursive(value, f"{path}.{key}", current_depth + 1, max_depth)
+                elif current_depth < 2:  # Only go deeper for less important keys at shallow levels
+                    self._log_structure_recursive(value, f"{path}.{key}", current_depth + 1, max_depth)
+        elif isinstance(obj, list):
+            self.logger.debug(f"{path}: list with {len(obj)} items")
+            if obj and current_depth < 2:  # Only inspect first item if not too deep
+                self._log_structure_recursive(obj[0], f"{path}[0]", current_depth + 1, max_depth)
+        else:
+            # Truncate very long values
+            str_value = str(obj)
+            if len(str_value) > 100:
+                str_value = str_value[:97] + "..."
+            self.logger.debug(f"{path}: {type(obj).__name__} = {str_value}")
+
+    async def _connect_k8s_with_retry(self) -> None:
+        """Phase 1 Fix: Connect K8s client with retry logic and exponential backoff."""
+        max_attempts = 3
+        base_delay = 1.0
+        
+        for attempt in range(max_attempts):
+            try:
+                self.logger.debug(f"K8s client connection attempt {attempt + 1}/{max_attempts}")
+                await self.k8s_client.connect()
+                self.logger.info("✅ K8s client connected successfully with retry logic")
+                return
+            except Exception as e:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
+                self.logger.warning(f"❌ K8s client connection attempt {attempt + 1} failed: {e}")
+                
+                if attempt < max_attempts - 1:
+                    self.logger.debug(f"Retrying in {delay} seconds...")
+                    await asyncio.sleep(delay)
+                else:
+                    self.logger.error("🚨 K8s client connection failed after all retry attempts")
+                    raise Exception(f"K8s client connection failed after {max_attempts} attempts: {e}")
+
     async def run_function_async(self, request: dict[str, Any]) -> dict[str, Any]:
         """Async main function entry point for context resolution with Phase 4 optimizations."""
         start_time = time.time()
@@ -127,13 +207,9 @@ class KubeCoreContextFunction:
         input_spec = request.get("input", {}).get("spec", {})
         self.logger.debug(f"Input specification keys: {list(input_spec.keys())}")
         
-        # Enhanced logging for debugging Crossplane input structure
-        self.logger.debug(f"Complete input structure keys: {list(request.get('input', {}).keys())}")
-        if 'context' in input_spec:
-            self.logger.debug(f"Found input.spec.context keys: {list(input_spec['context'].keys())}")
-            self.logger.debug(f"enableTransitiveDiscovery from input: {input_spec['context'].get('enableTransitiveDiscovery', 'NOT FOUND')}")
-        else:
-            self.logger.debug("No input.spec.context found - this explains why transitive discovery isn't working!")
+        # Phase 1 Fix: Comprehensive input structure discovery
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self._inspect_input_structure(request)
 
         # Validate required structure
         if "query" not in input_spec:
@@ -142,7 +218,7 @@ class KubeCoreContextFunction:
         
         self.logger.debug("Input validation passed")
 
-        # Extract context from both observed composite resource AND input.spec.context
+        # Phase 1 Fix: Extract context using improved extraction logic
         self.logger.debug("Extracting context from observed composite resource and input.spec.context")
         context = self._extract_context(request, input_spec)
         self.logger.debug(f"Extracted context: requestor={context.get('requestorName')}, namespace={context.get('requestorNamespace')}, references={len(context.get('references', {}))} ref types")
@@ -178,15 +254,9 @@ class KubeCoreContextFunction:
         }
         self.logger.debug(f"Prepared processing input with query and context")
 
-        # Ensure K8s client is connected for transitive discovery
-        if not self.k8s_client._connected:
-            self.logger.debug("K8s client not connected, attempting connection")
-            try:
-                await self.k8s_client.connect()
-                self.logger.debug("K8s client connected successfully")
-            except Exception as e:
-                self.logger.warning(f"K8s client connection failed: {e}")
-                # Continue with limited functionality - transitive discovery will be skipped
+        # Phase 1 Fix: Ensure K8s client connection with retry logic for transitive discovery
+        if context.get('enableTransitiveDiscovery') and not self.k8s_client._connected:
+            await self._connect_k8s_with_retry()
 
         # Phase 3: Process query with intelligent logic (now with performance optimizations)
         self.logger.debug("Starting query processing")
@@ -246,8 +316,9 @@ class KubeCoreContextFunction:
             return asyncio.run(self.run_function_async(request))
 
     def _extract_context(self, request: dict[str, Any], input_spec: dict[str, Any] = None) -> dict[str, Any]:
-        """Extract context information from both observed composite resource and input.spec.context."""
-        self.logger.debug("Extracting context from request and input spec")
+        """Phase 1 Fix: Extract context information with improved enableTransitiveDiscovery flag detection."""
+        self.logger.debug("🔍 Phase 1 Fix: Starting improved context extraction")
+        
         # Get observed composite resource
         observed = request.get("observed", {})
         composite = observed.get("composite", {})
@@ -258,7 +329,7 @@ class KubeCoreContextFunction:
         spec = composite.get("spec", {})
         self.logger.debug(f"Extracted metadata: {list(metadata.keys())}, spec: {list(spec.keys())}")
 
-        # Build context
+        # Build base context
         requestor_name = metadata.get("name", "unknown")
         requestor_namespace = metadata.get("namespace", "default")
         requestor_kind = composite.get("kind", "")
@@ -272,7 +343,6 @@ class KubeCoreContextFunction:
         self.logger.debug(f"Built base context: requestor={requestor_name}, namespace={requestor_namespace}, kind={requestor_kind}")
 
         # Extract references from spec
-        # This would typically parse various *Ref fields
         ref_count = 0
         for key, value in spec.items():
             if key.endswith("Ref") and isinstance(value, dict):
@@ -299,16 +369,46 @@ class KubeCoreContextFunction:
         
         self.logger.debug(f"Extracted {ref_count} total references across {len(context['references'])} reference types")
 
-        # Merge input.spec.context data if available
+        # Phase 1 Fix: Search for enableTransitiveDiscovery in multiple locations
+        transitive_discovery_found = False
+        transitive_discovery_value = False
+        
+        # Location 1: input.spec.context (most common expected location)
+        if input_spec and 'context' in input_spec and 'enableTransitiveDiscovery' in input_spec['context']:
+            transitive_discovery_value = input_spec['context']['enableTransitiveDiscovery']
+            transitive_discovery_found = True
+            self.logger.debug(f"✅ Found enableTransitiveDiscovery in input.spec.context: {transitive_discovery_value}")
+        
+        # Location 2: Direct in input.spec (flattened context)
+        elif input_spec and 'enableTransitiveDiscovery' in input_spec:
+            transitive_discovery_value = input_spec['enableTransitiveDiscovery']
+            transitive_discovery_found = True
+            self.logger.debug(f"✅ Found enableTransitiveDiscovery in input.spec: {transitive_discovery_value}")
+        
+        # Location 3: request.input.context (alternative path)
+        elif 'input' in request and 'context' in request['input'] and 'enableTransitiveDiscovery' in request['input']['context']:
+            transitive_discovery_value = request['input']['context']['enableTransitiveDiscovery']
+            transitive_discovery_found = True
+            self.logger.debug(f"✅ Found enableTransitiveDiscovery in request.input.context: {transitive_discovery_value}")
+        
+        # Location 4: Direct in request.input (top-level flattened)
+        elif 'input' in request and 'enableTransitiveDiscovery' in request['input']:
+            transitive_discovery_value = request['input']['enableTransitiveDiscovery']
+            transitive_discovery_found = True
+            self.logger.debug(f"✅ Found enableTransitiveDiscovery in request.input: {transitive_discovery_value}")
+        
+        if transitive_discovery_found:
+            context['enableTransitiveDiscovery'] = transitive_discovery_value
+            self.logger.info(f"🎯 PHASE 1 SUCCESS: enableTransitiveDiscovery = {transitive_discovery_value}")
+        else:
+            self.logger.warning("❌ PHASE 1 ISSUE: enableTransitiveDiscovery not found in any expected location")
+
+        # Process input.spec.context if available (preserve existing merge logic)
         if input_spec and 'context' in input_spec:
             input_context = input_spec['context']
             self.logger.debug(f"Merging input.spec.context with {len(input_context)} keys: {list(input_context.keys())}")
             
-            # Key context flags from input.spec.context
-            if 'enableTransitiveDiscovery' in input_context:
-                context['enableTransitiveDiscovery'] = input_context['enableTransitiveDiscovery']
-                self.logger.debug(f"Set enableTransitiveDiscovery from input: {context['enableTransitiveDiscovery']}")
-            
+            # Handle transitiveMaxDepth
             if 'transitiveMaxDepth' in input_context:
                 context['transitiveMaxDepth'] = input_context['transitiveMaxDepth']
                 self.logger.debug(f"Set transitiveMaxDepth from input: {context['transitiveMaxDepth']}")
@@ -322,12 +422,14 @@ class KubeCoreContextFunction:
             
             # Pass through any other context properties
             for key, value in input_context.items():
-                if key not in context and key not in ['references']:  # Don't overwrite existing or already handled
+                if key not in context and key not in ['references', 'enableTransitiveDiscovery']:  # Don't overwrite already handled
                     context[key] = value
                     self.logger.debug(f"Added context property from input: {key} = {value}")
-        else:
-            self.logger.debug("No input.spec.context found to merge")
-
+        
+        # Final validation
+        final_transitive_flag = context.get('enableTransitiveDiscovery', False)
+        self.logger.info(f"🎯 FINAL CONTEXT: enableTransitiveDiscovery = {final_transitive_flag}")
+        
         return context
 
     def _log_performance_stats(self) -> None:
