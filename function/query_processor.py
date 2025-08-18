@@ -75,6 +75,10 @@ class QueryProcessor:
             else:
                 result = await self._process_generic_query(input_spec)
 
+            # Perform reverse discovery if required
+            if context.get("requiresReverseDiscovery") and "discoveryHints" in context:
+                await self._perform_reverse_discovery(result, context)
+
             duration = time.time() - start_time
             self.logger.debug(f"Query processing completed in {duration*1000:.1f}ms")
             return result
@@ -573,6 +577,308 @@ class QueryProcessor:
         }
 
         return schema_name_mapping.get(requested_name, requested_name)
+
+    async def _discover_reverse_relationships(
+        self,
+        target_ref: dict[str, Any],
+        resource_type: str,
+        context: dict[str, Any]
+    ) -> dict[str, list[dict]]:
+        """
+        Discover resources that reference the target resource.
+        
+        For XGitHubProject, search: XKubeCluster, XKubEnv, XApp, XGitHubApp
+        For XKubeCluster, search: XKubeSystem, XKubEnv
+        For XKubeNet, search: XKubeCluster
+        
+        Args:
+            target_ref: Target resource reference (name, namespace)
+            resource_type: Type of the target resource
+            context: Request context
+            
+        Returns:
+            Dictionary of discovered reverse references
+        """
+        # Define reverse discovery mapping
+        reverse_discovery_map = {
+            "XGitHubProject": [
+                ("XKubeCluster", "platform.kubecore.io/v1alpha1", "githubProjectRef"),
+                ("XKubEnv", "platform.kubecore.io/v1alpha1", "githubProjectRef"), 
+                ("XApp", "app.kubecore.io/v1alpha1", "githubProjectRef"),
+                ("XGitHubApp", "github.platform.kubecore.io/v1alpha1", "githubProjectRef"),
+                ("XQualityGate", "platform.kubecore.io/v1alpha1", "githubProjectRef")
+            ],
+            "XKubeCluster": [
+                ("XKubeSystem", "platform.kubecore.io/v1alpha1", "kubeClusterRef"),
+                ("XKubEnv", "platform.kubecore.io/v1alpha1", "kubeClusterRef")
+            ],
+            "XKubeNet": [
+                ("XKubeCluster", "platform.kubecore.io/v1alpha1", "kubeNetRef")
+            ],
+            "XQualityGate": [
+                ("XKubEnv", "platform.kubecore.io/v1alpha1", "qualityGates"),
+                ("XApp", "app.kubecore.io/v1alpha1", "qualityGates")
+            ]
+        }
+        
+        if resource_type not in reverse_discovery_map:
+            return {}
+            
+        target_name = target_ref.get("name")
+        target_namespace = target_ref.get("namespace")
+        
+        if not target_name:
+            return {}
+            
+        discovered_refs = {}
+        search_configs = reverse_discovery_map[resource_type]
+        
+        # Process searches in parallel if performance optimizer is available
+        if self.performance_optimizer and len(search_configs) > 1:
+            try:
+                import asyncio
+                tasks = [
+                    self._search_for_reverse_refs(
+                        target_name, target_namespace, kind, api_version, ref_field
+                    ) 
+                    for kind, api_version, ref_field in search_configs
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Process results
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        self.logger.warning(f"Reverse discovery search failed: {result}")
+                        continue
+                    kind = search_configs[i][0]
+                    ref_type = self._kind_to_ref_type(kind)
+                    if result and ref_type:
+                        discovered_refs[ref_type] = result
+                        
+            except Exception as e:
+                self.logger.warning(f"Parallel reverse discovery failed, using sequential: {e}")
+                # Fall back to sequential processing
+                for kind, api_version, ref_field in search_configs:
+                    try:
+                        refs = await self._search_for_reverse_refs(
+                            target_name, target_namespace, kind, api_version, ref_field
+                        )
+                        ref_type = self._kind_to_ref_type(kind)
+                        if refs and ref_type:
+                            discovered_refs[ref_type] = refs
+                    except Exception as e:
+                        self.logger.warning(f"Sequential reverse discovery failed for {kind}: {e}")
+        else:
+            # Sequential processing
+            for kind, api_version, ref_field in search_configs:
+                try:
+                    refs = await self._search_for_reverse_refs(
+                        target_name, target_namespace, kind, api_version, ref_field
+                    )
+                    ref_type = self._kind_to_ref_type(kind)
+                    if refs and ref_type:
+                        discovered_refs[ref_type] = refs
+                except Exception as e:
+                    self.logger.warning(f"Reverse discovery failed for {kind}: {e}")
+                    
+        return discovered_refs
+
+    async def _search_for_reverse_refs(
+        self,
+        target_name: str,
+        target_namespace: str | None,
+        search_kind: str,
+        search_api_version: str,
+        ref_field: str
+    ) -> list[dict]:
+        """
+        Search for resources of a specific kind that reference the target.
+        
+        Args:
+            target_name: Name of target resource
+            target_namespace: Namespace of target resource
+            search_kind: Kind of resources to search
+            search_api_version: API version of resources to search
+            ref_field: Reference field to check
+            
+        Returns:
+            List of resource references that point to target
+        """
+        found_refs = []
+        
+        try:
+            # List all resources of the search kind
+            list_result = await self.resource_resolver.k8s_client.list_resources(
+                api_version=search_api_version,
+                kind=search_kind,
+                limit=100  # Reasonable limit to avoid excessive API calls
+            )
+            
+            items = list_result.get("items", [])
+            self.logger.debug(f"Searching {len(items)} {search_kind} resources for refs to {target_name}")
+            
+            for item in items:
+                if self._contains_reference_to(item, target_name, target_namespace, ref_field):
+                    metadata = item.get("metadata", {})
+                    found_refs.append({
+                        "name": metadata.get("name"),
+                        "namespace": metadata.get("namespace"),
+                        "apiVersion": search_api_version,
+                        "kind": search_kind
+                    })
+                    
+            self.logger.debug(f"Found {len(found_refs)} {search_kind} resources referencing {target_name}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to search {search_kind} for references to {target_name}: {e}")
+            
+        return found_refs
+        
+    def _contains_reference_to(self, resource: dict, target_name: str, target_namespace: str | None, ref_field: str) -> bool:
+        """
+        Check if resource contains reference to target.
+        
+        Args:
+            resource: Resource to check
+            target_name: Name of target resource
+            target_namespace: Namespace of target resource  
+            ref_field: Reference field to check
+            
+        Returns:
+            True if resource contains reference to target
+        """
+        spec = resource.get("spec", {})
+        
+        # Handle direct reference fields (e.g., githubProjectRef)
+        if ref_field.endswith("Ref"):
+            ref_value = spec.get(ref_field, {})
+            if isinstance(ref_value, dict):
+                return (ref_value.get("name") == target_name and 
+                       (target_namespace is None or ref_value.get("namespace") == target_namespace))
+                       
+        # Handle reference arrays (e.g., qualityGates)
+        elif ref_field in spec:
+            ref_list = spec.get(ref_field, [])
+            if isinstance(ref_list, list):
+                for ref_item in ref_list:
+                    if isinstance(ref_item, dict):
+                        ref_obj = ref_item.get("ref", ref_item)  # Handle both ref.ref and direct ref structures
+                        if isinstance(ref_obj, dict):
+                            if (ref_obj.get("name") == target_name and 
+                               (target_namespace is None or ref_obj.get("namespace") == target_namespace)):
+                                return True
+        
+        return False
+        
+    def _kind_to_ref_type(self, kind: str) -> str | None:
+        """Convert Kubernetes kind to reference type."""
+        kind_to_ref_map = {
+            "XKubeCluster": "kubeClusterRefs",
+            "XKubEnv": "kubEnvRefs", 
+            "XApp": "appRefs",
+            "XGitHubApp": "githubAppRefs",
+            "XQualityGate": "qualityGateRefs",
+            "XKubeSystem": "kubeSystemRefs"
+        }
+        return kind_to_ref_map.get(kind)
+
+    async def _perform_reverse_discovery(self, platform_context: dict[str, Any], context: dict[str, Any]) -> None:
+        """
+        Perform reverse discovery and merge results into platform context.
+        
+        Args:
+            platform_context: Platform context to update with reverse discovery results
+            context: Request context containing discovery hints
+        """
+        hints = context.get("discoveryHints", {})
+        target_ref = hints.get("targetRef", {})
+        
+        if not target_ref.get("name"):
+            self.logger.warning("No target reference found for reverse discovery")
+            return
+            
+        resource_type = target_ref.get("kind", "")
+        self.logger.info(f"Performing reverse discovery for {resource_type}: {target_ref.get('name')}")
+        
+        try:
+            # Discover reverse relationships
+            discovered_refs = await self._discover_reverse_relationships(
+                target_ref, resource_type, context
+            )
+            
+            # Merge discovered references into platform context
+            if discovered_refs:
+                # Update the context references with discovered reverse references
+                context.setdefault("references", {}).update(discovered_refs)
+                
+                # Process the newly discovered schemas
+                for ref_type, refs in discovered_refs.items():
+                    if refs:  # Only process if we have actual references
+                        schema_type = ref_type.replace("Refs", "")  # Convert appRefs -> app
+                        await self._process_discovered_schema(
+                            schema_type, refs, platform_context
+                        )
+                        
+                self.logger.info(f"Reverse discovery completed: found {sum(len(refs) for refs in discovered_refs.values())} references across {len(discovered_refs)} types")
+            else:
+                self.logger.debug(f"No reverse references found for {resource_type}: {target_ref.get('name')}")
+                
+        except Exception as e:
+            self.logger.warning(f"Reverse discovery failed: {e}")
+
+    async def _process_discovered_schema(
+        self,
+        schema_type: str,
+        refs: list[dict],
+        platform_context: dict[str, Any]
+    ) -> None:
+        """
+        Process a schema discovered through reverse discovery.
+        
+        Args:
+            schema_type: Type of schema to process (e.g., 'app', 'kubEnv')
+            refs: List of discovered references
+            platform_context: Platform context to update
+        """
+        # Map requested schema name to actual schema name
+        actual_schema_name = self._map_requested_to_actual_schema(schema_type)
+        schema_info = self.schema_registry.get_schema_info(actual_schema_name)
+        if not schema_info:
+            self.logger.warning(f"Schema info not found for {actual_schema_name}")
+            return
+
+        instances = []
+        for ref in refs:
+            # Create summary based on the resource type
+            summary = await self._create_reverse_discovered_summary(ref)
+            instances.append({
+                "name": ref.get("name", "unknown"),
+                "namespace": ref.get("namespace", "default"),
+                "summary": summary
+            })
+
+        # Add to platform context
+        platform_context["availableSchemas"][schema_type] = {
+            "metadata": {
+                "apiVersion": schema_info.api_version,
+                "kind": schema_info.kind,
+                "accessible": True,
+                "relationshipPath": ["reverse", schema_type],
+                "discoveryMethod": "reverse"
+            },
+            "instances": instances
+        }
+        
+        self.logger.debug(f"Added {len(instances)} instances for schema {schema_type} via reverse discovery")
+
+    async def _create_reverse_discovered_summary(self, ref: dict[str, Any]) -> dict[str, Any]:
+        """Create summary for reverse-discovered resource."""
+        return {
+            "name": ref.get("name", "unknown"),
+            "kind": ref.get("kind", "unknown"),
+            "status": "discovered",
+            "discoveredBy": "reverse-lookup"
+        }
 
     async def _process_schemas_parallel(
         self,

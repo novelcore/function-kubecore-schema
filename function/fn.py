@@ -120,8 +120,10 @@ class KubeCoreContextFunction:
         
         self.logger.debug(f"Query details: resourceType={resource_type}, requestedSchemas={requested_schemas}")
 
-        cache_key = self.cache.generate_key(resource_type, context, requested_schemas)
-        self.logger.debug(f"Generated cache key: {cache_key}")
+        # Determine discovery mode
+        discovery_mode = "bidirectional" if context.get("requiresReverseDiscovery") else "forward"
+        cache_key = self.cache.generate_key(resource_type, context, requested_schemas, discovery_mode)
+        self.logger.debug(f"Generated cache key: {cache_key} (mode: {discovery_mode})")
         cached_result = self.cache.get(cache_key)
 
         if cached_result:
@@ -214,12 +216,15 @@ class KubeCoreContextFunction:
         # Build context
         requestor_name = metadata.get("name", "unknown")
         requestor_namespace = metadata.get("namespace", "default")
+        requestor_kind = composite.get("kind", "")
+        
         context = {
             "requestorName": requestor_name,
             "requestorNamespace": requestor_namespace,
+            "requestorKind": requestor_kind,
             "references": {}
         }
-        self.logger.debug(f"Built base context: requestor={requestor_name}, namespace={requestor_namespace}")
+        self.logger.debug(f"Built base context: requestor={requestor_name}, namespace={requestor_namespace}, kind={requestor_kind}")
 
         # Extract references from spec
         # This would typically parse various *Ref fields
@@ -234,6 +239,18 @@ class KubeCoreContextFunction:
                 context["references"][key] = value
                 ref_count += len(value)
                 self.logger.debug(f"Found reference list: {key} with {len(value)} items")
+        
+        # Add reverse discovery hints for hub resources
+        if requestor_kind in ["XGitHubProject", "XKubeCluster", "XKubeNet", "XQualityGate"]:
+            context["requiresReverseDiscovery"] = True
+            context["discoveryHints"] = {
+                "targetRef": {
+                    "name": requestor_name,
+                    "namespace": requestor_namespace,
+                    "kind": requestor_kind
+                }
+            }
+            self.logger.debug(f"Added reverse discovery hints for {requestor_kind}: {requestor_name}")
         
         self.logger.debug(f"Extracted {ref_count} total references across {len(context['references'])} reference types")
 

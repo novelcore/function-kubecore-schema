@@ -92,13 +92,14 @@ class ContextCache:
         self.logger.debug(f"Evicted cache entry: {oldest_key}")
 
     def generate_key(self, resource_type: str, context: dict[str, Any],
-                    requested_schemas: list[str] | None = None) -> str:
+                    requested_schemas: list[str] | None = None, discovery_mode: str = "forward") -> str:
         """Generate cache key from query parameters.
         
         Args:
             resource_type: Type of resource being queried
             context: Request context including references
             requested_schemas: Optional list of requested schemas
+            discovery_mode: Discovery mode (forward, bidirectional)
             
         Returns:
             Generated cache key
@@ -106,6 +107,7 @@ class ContextCache:
         # Create deterministic key components
         key_components = [
             f"type:{resource_type}",
+            f"mode:{discovery_mode}",
         ]
 
         # Add context references in sorted order for consistency
@@ -113,6 +115,12 @@ class ContextCache:
             refs = context["references"]
             sorted_refs = sorted(refs.items()) if isinstance(refs, dict) else []
             key_components.append(f"refs:{hash(str(sorted_refs))}")
+
+        # Add reverse discovery hints if present
+        if context.get("requiresReverseDiscovery") and "discoveryHints" in context:
+            hints = context["discoveryHints"]
+            target_ref = hints.get("targetRef", {})
+            key_components.append(f"target:{target_ref.get('kind')}:{target_ref.get('name')}:{target_ref.get('namespace')}")
 
         # Add requested schemas
         if requested_schemas:
