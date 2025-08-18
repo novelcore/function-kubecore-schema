@@ -130,9 +130,9 @@ class K8sClient:
             raise K8sConnectionError("Core V1 API client not initialized")
 
         try:
-            # Simple health check - list namespaces
+            # Simple health check - list namespaces (limited to 1 for efficiency)
             await asyncio.get_event_loop().run_in_executor(
-                None, self._core_v1.list_namespace, None, None, None, None, 1
+                None, lambda: self._core_v1.list_namespace(limit=1)
             )
         except ApiException as e:
             if e.status == 401:
