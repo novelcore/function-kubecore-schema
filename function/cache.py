@@ -121,6 +121,13 @@ class ContextCache:
             hints = context["discoveryHints"]
             target_ref = hints.get("targetRef", {})
             key_components.append(f"target:{target_ref.get('kind')}:{target_ref.get('name')}:{target_ref.get('namespace')}")
+        
+        # Add transitive discovery configuration if enabled
+        if context.get("enableTransitiveDiscovery", True):
+            key_components.append("transitive:enabled")
+            # Include transitive-specific parameters if available
+            max_depth = context.get("transitiveMaxDepth", 3)
+            key_components.append(f"depth:{max_depth}")
 
         # Add requested schemas
         if requested_schemas:

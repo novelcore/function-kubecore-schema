@@ -30,6 +30,7 @@ try:
     from .resource_summarizer import ResourceSummarizer
     from .response_generator import ResponseGenerator
     from .schema_registry import SchemaRegistry
+    from .transitive_discovery import TransitiveDiscoveryEngine, TransitiveDiscoveryConfig
 except ImportError:
     # Fallback for direct execution
     from cache import ContextCache  # type: ignore
@@ -41,6 +42,7 @@ except ImportError:
     from resource_summarizer import ResourceSummarizer  # type: ignore
     from response_generator import ResponseGenerator  # type: ignore
     from schema_registry import SchemaRegistry  # type: ignore
+    from transitive_discovery import TransitiveDiscoveryEngine, TransitiveDiscoveryConfig  # type: ignore
 
 
 class KubeCoreContextFunction:
@@ -86,9 +88,24 @@ class KubeCoreContextFunction:
         self.insights_engine = InsightsEngine(self.schema_registry)
         self.logger.debug("Phase 3 processing components initialized")
 
-        # Integrate caching into query processor
+        # Initialize transitive discovery engine
+        transitive_config = TransitiveDiscoveryConfig(
+            max_depth=int(os.getenv("TRANSITIVE_MAX_DEPTH", "3")),
+            max_resources_per_type=int(os.getenv("TRANSITIVE_MAX_RESOURCES", "50")),
+            timeout_per_depth=float(os.getenv("TRANSITIVE_TIMEOUT", "10.0")),
+            parallel_workers=int(os.getenv("TRANSITIVE_WORKERS", "5")),
+            cache_intermediate_results=os.getenv("TRANSITIVE_CACHE", "true").lower() == "true"
+        )
+        self.transitive_discovery_engine = TransitiveDiscoveryEngine(
+            self.resource_resolver, 
+            transitive_config
+        )
+        self.logger.debug(f"Transitive discovery engine initialized with max_depth={transitive_config.max_depth}")
+
+        # Integrate caching and components into query processor
         self.query_processor.cache = self.cache
         self.query_processor.performance_optimizer = self.performance_optimizer
+        self.query_processor.set_transitive_discovery_engine(self.transitive_discovery_engine)
         self.logger.info("KubeCoreContextFunction initialization complete")
 
     async def run_function_async(self, request: dict[str, Any]) -> dict[str, Any]:

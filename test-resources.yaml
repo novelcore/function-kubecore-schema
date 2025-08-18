@@ -1,0 +1,81 @@
+# Test App that references the GitHubProject
+apiVersion: app.kubecore.io/v1alpha1
+kind: App
+metadata:
+  name: demo-api
+  namespace: test
+spec:
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  kubEnvRef:
+    name: demo-dev
+    namespace: test
+  applicationConfig:
+    name: demo-api
+    version: "1.0.0"
+    replicas: 2
+  deploymentConfig:
+    image: nginx:latest
+    port: 8080
+
+---
+# Test KubEnv that references the GitHubProject  
+apiVersion: platform.kubecore.io/v1alpha1
+kind: KubEnv
+metadata:
+  name: demo-staging-with-ref
+  namespace: test
+spec:
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  kubeClusterRef:
+    name: demo-cluster
+    namespace: test
+  environmentType: staging
+  resources:
+    profile: medium
+    defaults:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "512Mi"
+
+---
+# Test KubeCluster that references the GitHubProject
+apiVersion: platform.kubecore.io/v1alpha1  
+kind: KubeCluster
+metadata:
+  name: demo-cluster-with-ref
+  namespace: test
+spec:
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  clusterConfig:
+    region: us-west-2
+    nodeCount: 3
+    nodeType: t3.medium
+  version: "1.28.0"
+
+---
+# Test GitHubApp that references the GitHubProject
+apiVersion: github.platform.kubecore.io/v1alpha1
+kind: GitHubApp
+metadata:
+  name: demo-github-app
+  namespace: test
+spec:
+  githubProjectRef:
+    name: demo-project
+    namespace: test
+  appConfig:
+    name: demo-ci-app
+    description: "CI/CD app for demo project"
+    permissions:
+      contents: read
+      pull_requests: write
+      checks: write

@@ -13,6 +13,7 @@ from typing import Any
 from .resource_resolver import ResourceResolver
 from .resource_summarizer import ResourceSummarizer
 from .schema_registry import SchemaRegistry
+from .transitive_discovery import TransitiveDiscoveryEngine, TransitiveDiscoveryConfig
 
 
 class QueryProcessor:
@@ -40,6 +41,9 @@ class QueryProcessor:
         # Phase 4 components (set by main function)
         self.cache: Any | None = None
         self.performance_optimizer: Any | None = None
+        
+        # Transitive discovery engine
+        self.transitive_discovery_engine: TransitiveDiscoveryEngine | None = None
 
     async def process_query(self, input_spec: dict[str, Any]) -> dict[str, Any]:
         """Process query and generate response with Phase 4 optimizations.
@@ -78,6 +82,10 @@ class QueryProcessor:
             # Perform reverse discovery if required
             if context.get("requiresReverseDiscovery") and "discoveryHints" in context:
                 await self._perform_reverse_discovery(result, context)
+            
+            # Perform transitive discovery if enabled and engine available
+            if context.get("enableTransitiveDiscovery", True) and self.transitive_discovery_engine:
+                await self._perform_transitive_discovery(result, context, resource_type)
 
             duration = time.time() - start_time
             self.logger.debug(f"Query processing completed in {duration*1000:.1f}ms")
@@ -932,3 +940,150 @@ class QueryProcessor:
         except Exception as e:
             self.logger.error(f"Parallel schema processing failed: {e}")
             raise
+
+    async def _perform_transitive_discovery(
+        self,
+        platform_context: dict[str, Any],
+        context: dict[str, Any],
+        resource_type: str
+    ) -> None:
+        """
+        Perform transitive discovery and merge results into platform context.
+        
+        Args:
+            platform_context: Platform context to update with transitive discovery results
+            context: Request context
+            resource_type: Type of resource being queried
+        """
+        if not self.transitive_discovery_engine:
+            return
+            
+        # Extract target reference for transitive discovery
+        requestor = platform_context.get("requestor", {})
+        target_ref = {
+            "name": requestor.get("name", "unknown"),
+            "namespace": requestor.get("namespace", "default"),
+            "kind": resource_type,
+            "apiVersion": self._get_api_version_for_kind(resource_type)
+        }
+        
+        self.logger.info(f"Performing transitive discovery for {resource_type}: {target_ref.get('name')}")
+        
+        try:
+            # Discover transitive relationships
+            transitive_resources = await self.transitive_discovery_engine.discover_transitive_relationships(
+                target_ref, resource_type, context
+            )
+            
+            # Merge transitive discoveries into platform context
+            if transitive_resources:
+                for schema_type, resources in transitive_resources.items():
+                    if resources:  # Only process if we have actual resources
+                        await self._process_transitive_schema(
+                            schema_type, resources, platform_context
+                        )
+                        
+                self.logger.info(f"Transitive discovery completed: found {sum(len(resources) for resources in transitive_resources.values())} resources across {len(transitive_resources)} types")
+            else:
+                self.logger.debug(f"No transitive relationships found for {resource_type}: {target_ref.get('name')}")
+                
+        except Exception as e:
+            self.logger.warning(f"Transitive discovery failed: {e}")
+
+    async def _process_transitive_schema(
+        self,
+        schema_type: str,
+        transitive_resources: list,
+        platform_context: dict[str, Any]
+    ) -> None:
+        """
+        Process a schema discovered through transitive discovery.
+        
+        Args:
+            schema_type: Type of schema to process (e.g., 'app', 'kubEnv')
+            transitive_resources: List of TransitiveDiscoveredResource objects
+            platform_context: Platform context to update
+        """
+        # Map requested schema name to actual schema name
+        actual_schema_name = self._map_requested_to_actual_schema(schema_type)
+        schema_info = self.schema_registry.get_schema_info(actual_schema_name)
+        if not schema_info:
+            self.logger.warning(f"Schema info not found for {actual_schema_name}")
+            return
+
+        instances = []
+        for transitive_resource in transitive_resources:
+            # Create instance data with transitive information
+            instance_data = {
+                "name": transitive_resource.name,
+                "namespace": transitive_resource.namespace,
+                "summary": {
+                    **transitive_resource.summary,
+                    "discoveryHops": transitive_resource.discovery_hops,
+                    "discoveryMethod": transitive_resource.discovery_method,
+                    "relationshipChain": " → ".join(
+                        f"{ref.kind}({ref.name})" for ref in transitive_resource.relationship_path
+                    )
+                }
+            }
+            
+            # Add intermediate resources information if present
+            if transitive_resource.intermediate_resources:
+                instance_data["summary"]["intermediateResources"] = [
+                    {
+                        "kind": ref.kind,
+                        "name": ref.name,
+                        "namespace": ref.namespace
+                    }
+                    for ref in transitive_resource.intermediate_resources
+                ]
+            
+            instances.append(instance_data)
+
+        # Check if schema already exists in platform context
+        if schema_type in platform_context["availableSchemas"]:
+            # Merge with existing instances, avoiding duplicates
+            existing_instances = platform_context["availableSchemas"][schema_type]["instances"]
+            existing_names = {(inst["name"], inst["namespace"]) for inst in existing_instances}
+            
+            new_instances = [
+                inst for inst in instances
+                if (inst["name"], inst["namespace"]) not in existing_names
+            ]
+            
+            if new_instances:
+                existing_instances.extend(new_instances)
+                # Update metadata to indicate transitive discovery was used
+                platform_context["availableSchemas"][schema_type]["metadata"]["discoveryMethod"] = "hybrid"
+        else:
+            # Add new schema entry
+            platform_context["availableSchemas"][schema_type] = {
+                "metadata": {
+                    "apiVersion": schema_info.api_version,
+                    "kind": schema_info.kind,
+                    "accessible": True,
+                    "relationshipPath": ["transitive", schema_type],
+                    "discoveryMethod": "transitive"
+                },
+                "instances": instances
+            }
+        
+        self.logger.debug(f"Added {len(instances)} transitive instances for schema {schema_type}")
+
+    def _get_api_version_for_kind(self, kind: str) -> str:
+        """Get the API version for a given Kubernetes kind."""
+        api_version_map = {
+            "XApp": "app.kubecore.io/v1alpha1",
+            "XKubeSystem": "platform.kubecore.io/v1alpha1",
+            "XKubEnv": "platform.kubecore.io/v1alpha1",
+            "XKubeCluster": "platform.kubecore.io/v1alpha1",
+            "XGitHubProject": "github.platform.kubecore.io/v1alpha1",
+            "XGitHubApp": "github.platform.kubecore.io/v1alpha1",
+            "XQualityGate": "platform.kubecore.io/v1alpha1"
+        }
+        return api_version_map.get(kind, "unknown")
+
+    def set_transitive_discovery_engine(self, engine: TransitiveDiscoveryEngine) -> None:
+        """Set the transitive discovery engine instance."""
+        self.transitive_discovery_engine = engine
+        self.logger.debug("Transitive discovery engine configured")

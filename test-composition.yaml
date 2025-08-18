@@ -1,0 +1,119 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: test-bidirectional-discovery
+  labels:
+    provider: kubecore
+    category: test
+spec:
+  compositeTypeRef:
+    apiVersion: test.kubecore.io/v1alpha1
+    kind: XResourceMap
+  
+  mode: Pipeline
+  pipeline:
+  - step: discover-resources
+    functionRef:
+      name: function-kubecore-schema
+    input:
+      apiVersion: context.fn.kubecore.io/v1beta1
+      kind: Input
+      spec:
+        query:
+          resourceType: "XGitHubProject"
+          requestedSchemas:
+            - "kubeCluster"
+            - "kubEnv" 
+            - "kubeSystem"
+            - "githubApp"
+            - "app"
+  
+  - step: create-configmap
+    functionRef:
+      name: function-auto-ready
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - name: resource-map-configmap
+        base:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: # Will be set by claim
+            namespace: test
+          data:
+            resource-map.yaml: # Will be populated by context
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - type: string
+            string:
+              fmt: "%s-resource-map"
+        - type: FromCompositeFieldPath  
+          fromFieldPath: spec.githubProjectRef.name
+          toFieldPath: data["github-project"]
+        - type: FromEnvironmentFieldPath
+          fromFieldPath: context.fn.kubecore.io/platform-context
+          toFieldPath: data["resource-map.yaml"]
+          transforms:
+          - type: convert
+            convert:
+              toType: string
+              format: yaml
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xresourcemaps.test.kubecore.io
+spec:
+  group: test.kubecore.io
+  names:
+    kind: XResourceMap
+    plural: xresourcemaps
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              githubProjectRef:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - name
+            required:
+            - githubProjectRef
+          status:
+            type: object
+            properties:
+              conditions:
+                type: array
+                items:
+                  type: object
+  claimNames:
+    kind: ResourceMap
+    plural: resourcemaps
+
+---
+apiVersion: test.kubecore.io/v1alpha1
+kind: ResourceMap
+metadata:
+  name: demo-project-test
+  namespace: test
+spec:
+  githubProjectRef:
+    name: demo-project
+    namespace: test
